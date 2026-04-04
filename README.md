@@ -10,6 +10,15 @@ It supports:
 
 FriSpeak is designed around a simple workflow: hold a hotkey, speak, release, and have the cleaned text inserted into the active app with caret-aware formatting.
 
+## Download
+
+The easiest way to install FriSpeak is from the latest GitHub release:
+
+- Download [FriSpeak.dmg](https://github.com/FriDev/FriSpeak/releases/latest/download/FriSpeak.dmg)
+- Open the DMG
+- Drag `FriSpeak.app` into `Applications`
+- Launch FriSpeak and complete onboarding
+
 ## Current Status
 
 The project is usable and builds locally in Xcode. It also includes:
