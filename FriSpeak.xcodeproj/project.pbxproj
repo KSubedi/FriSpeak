@@ -6,8 +6,25 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E17A90012041250000000001 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = E17A90032041250000000003 /* MLXLLM */; };
+		E17A90022041250000000002 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = E17A90042041250000000004 /* MLXLMCommon */; };
+		E1F10001203A250000000001 /* Qwen3ASR in Frameworks */ = {isa = PBXBuildFile; productRef = E1F10003203A250000000003 /* Qwen3ASR */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E1DDE6E12F72296400ECFEB0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = E1DDE6C02F72296200ECFEB0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E1DDE6C72F72296200ECFEB0;
+			remoteInfo = FriSpeak;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		E1DDE6C82F72296200ECFEB0 /* FriSpeak.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FriSpeak.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E1DDE6DB2F72296400ECFEB0 /* FriSpeakTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FriSpeakTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +33,25 @@
 			path = FriSpeak;
 			sourceTree = "<group>";
 		};
+		E1DDE6DC2F72296400ECFEB0 /* FriSpeakTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FriSpeakTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		E1DDE6C52F72296200ECFEB0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E17A90012041250000000001 /* MLXLLM in Frameworks */,
+				E17A90022041250000000002 /* MLXLMCommon in Frameworks */,
+				E1F10001203A250000000001 /* Qwen3ASR in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E1DDE6DD2F72296400ECFEB0 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -33,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				E1DDE6CA2F72296200ECFEB0 /* FriSpeak */,
+				E1DDE6DC2F72296400ECFEB0 /* FriSpeakTests */,
 				E1DDE6C92F72296200ECFEB0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +74,7 @@
 			isa = PBXGroup;
 			children = (
 				E1DDE6C82F72296200ECFEB0 /* FriSpeak.app */,
+				E1DDE6DB2F72296400ECFEB0 /* FriSpeakTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -65,10 +99,36 @@
 			);
 			name = FriSpeak;
 			packageProductDependencies = (
+				E17A90032041250000000003 /* MLXLLM */,
+				E17A90042041250000000004 /* MLXLMCommon */,
+				E1F10003203A250000000003 /* Qwen3ASR */,
 			);
 			productName = FriSpeak;
 			productReference = E1DDE6C82F72296200ECFEB0 /* FriSpeak.app */;
 			productType = "com.apple.product-type.application";
+		};
+		E1DDE6E02F72296400ECFEB0 /* FriSpeakTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E1DDE6E32F72296400ECFEB0 /* Build configuration list for PBXNativeTarget "FriSpeakTests" */;
+			buildPhases = (
+				E1DDE6DF2F72296400ECFEB0 /* Sources */,
+				E1DDE6DD2F72296400ECFEB0 /* Frameworks */,
+				E1DDE6DE2F72296400ECFEB0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E1DDE6E22F72296400ECFEB0 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				E1DDE6DC2F72296400ECFEB0 /* FriSpeakTests */,
+			);
+			name = FriSpeakTests;
+			packageProductDependencies = (
+			);
+			productName = FriSpeakTests;
+			productReference = E1DDE6DB2F72296400ECFEB0 /* FriSpeakTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -83,6 +143,10 @@
 					E1DDE6C72F72296200ECFEB0 = {
 						CreatedOnToolsVersion = 26.2;
 					};
+					E1DDE6E02F72296400ECFEB0 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = E1DDE6C72F72296200ECFEB0;
+					};
 				};
 			};
 			buildConfigurationList = E1DDE6C32F72296200ECFEB0 /* Build configuration list for PBXProject "FriSpeak" */;
@@ -94,18 +158,30 @@
 			);
 			mainGroup = E1DDE6BF2F72296200ECFEB0;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				E17A90052041250000000005 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				E1F10002203A250000000002 /* XCRemoteSwiftPackageReference "speech-swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E1DDE6C92F72296200ECFEB0 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				E1DDE6C72F72296200ECFEB0 /* FriSpeak */,
+				E1DDE6E02F72296400ECFEB0 /* FriSpeakTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		E1DDE6C62F72296200ECFEB0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E1DDE6DE2F72296400ECFEB0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +198,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		E1DDE6DF2F72296400ECFEB0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		E1DDE6E22F72296400ECFEB0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E1DDE6C72F72296200ECFEB0 /* FriSpeak */;
+			targetProxy = E1DDE6E12F72296400ECFEB0 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		E1DDE6D62F72296400ECFEB0 /* Debug */ = {
@@ -248,14 +339,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
+				DEVELOPMENT_TEAM = ANNYWKNYW6;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FriSpeak records audio while you hold the push-to-talk shortcut.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FriSpeak transcribes recorded audio into text.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -263,6 +360,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fridev.FriSpeak;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -278,14 +376,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = YES;
+				DEVELOPMENT_TEAM = ANNYWKNYW6;
+				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "FriSpeak records audio while you hold the push-to-talk shortcut.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "FriSpeak transcribes recorded audio into text.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -293,6 +397,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fridev.FriSpeak;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -300,6 +405,62 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		E1DDE6E42F72296400ECFEB0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ANNYWKNYW6;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fridev.FriSpeakTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FriSpeak.app/Contents/MacOS/FriSpeak";
+			};
+			name = Debug;
+		};
+		E1DDE6E52F72296400ECFEB0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = ANNYWKNYW6;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.2;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fridev.FriSpeakTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FriSpeak.app/Contents/MacOS/FriSpeak";
 			};
 			name = Release;
 		};
@@ -324,7 +485,53 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		E1DDE6E32F72296400ECFEB0 /* Build configuration list for PBXNativeTarget "FriSpeakTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E1DDE6E42F72296400ECFEB0 /* Debug */,
+				E1DDE6E52F72296400ECFEB0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		E17A90052041250000000005 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 2.31.3;
+			};
+		};
+		E1F10002203A250000000002 /* XCRemoteSwiftPackageReference "speech-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/soniqo/speech-swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.0.7;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		E17A90032041250000000003 /* MLXLLM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E17A90052041250000000005 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLLM;
+		};
+		E17A90042041250000000004 /* MLXLMCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E17A90052041250000000005 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
+			productName = MLXLMCommon;
+		};
+		E1F10003203A250000000003 /* Qwen3ASR */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1F10002203A250000000002 /* XCRemoteSwiftPackageReference "speech-swift" */;
+			productName = Qwen3ASR;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = E1DDE6C02F72296200ECFEB0 /* Project object */;
 }

@@ -1,0 +1,316 @@
+import Foundation
+
+struct Arguments {
+    let adaptedText: String
+    let originalCandidateText: String
+    let before: String
+    let selected: String
+    let after: String
+}
+
+enum HarnessError: LocalizedError {
+    case missingArgument(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .missingArgument(name):
+            return "Missing required argument: \(name)"
+        }
+    }
+}
+
+func parseArguments() throws -> Arguments {
+    var iterator = CommandLine.arguments.dropFirst().makeIterator()
+    var adaptedText: String?
+    var originalCandidateText: String?
+    var before = ""
+    var selected = ""
+    var after = ""
+
+    while let argument = iterator.next() {
+        switch argument {
+        case "--adapted-text":
+            adaptedText = iterator.next()
+        case "--original-candidate-text":
+            originalCandidateText = iterator.next()
+        case "--before":
+            before = iterator.next() ?? ""
+        case "--selected":
+            selected = iterator.next() ?? ""
+        case "--after":
+            after = iterator.next() ?? ""
+        default:
+            continue
+        }
+    }
+
+    guard let adaptedText else {
+        throw HarnessError.missingArgument("--adapted-text")
+    }
+
+    guard let originalCandidateText else {
+        throw HarnessError.missingArgument("--original-candidate-text")
+    }
+
+    return Arguments(
+        adaptedText: adaptedText,
+        originalCandidateText: originalCandidateText,
+        before: before,
+        selected: selected,
+        after: after
+    )
+}
+
+let leadingInsertionPunctuation: Set<Character> = [".", "!", "?", ";", ":", "-"]
+
+func isWhitespaceCharacter(_ character: Character) -> Bool {
+    character.unicodeScalars.allSatisfy(CharacterSet.whitespacesAndNewlines.contains)
+}
+
+func sanitizeAdaptedInsertion(_ adaptedText: String, candidateText: String, editorContext: FocusedTextContext) -> String {
+    let trimmedCandidate = candidateText.trimmingCharacters(in: .whitespacesAndNewlines)
+    var trimmedAdapted = adaptedText.trimmingCharacters(in: .whitespacesAndNewlines)
+    let preservedLeadingWhitespace = String(adaptedText.prefix { isWhitespaceCharacter($0) })
+
+    trimmedAdapted = stripTrailingCopiedAfterContext(
+        from: trimmedAdapted,
+        candidateText: trimmedCandidate,
+        editorContext: editorContext
+    )
+    trimmedAdapted = normalizeBoundaryCapitalization(
+        in: trimmedAdapted,
+        candidateText: trimmedCandidate,
+        editorContext: editorContext
+    )
+
+    if
+        let candidateFirst = trimmedCandidate.first,
+        leadingInsertionPunctuation.contains(candidateFirst),
+        trimmedAdapted.first != candidateFirst
+    {
+        let leadingPunctuationSegment = String(
+            trimmedCandidate.prefix(while: { leadingInsertionPunctuation.contains($0) || isWhitespaceCharacter($0) })
+        )
+
+        if !leadingPunctuationSegment.isEmpty {
+            let preservedLeadingWhitespace = String(adaptedText.prefix { isWhitespaceCharacter($0) })
+            return preservedLeadingWhitespace + leadingPunctuationSegment + trimmedAdapted
+        }
+    }
+
+    guard
+        !trimmedCandidate.isEmpty,
+        !trimmedAdapted.isEmpty,
+        let adaptedFirst = trimmedAdapted.first,
+        let candidateFirst = trimmedCandidate.first
+    else {
+        return adaptedText
+    }
+
+    guard
+        leadingInsertionPunctuation.contains(adaptedFirst),
+        !leadingInsertionPunctuation.contains(candidateFirst),
+        !editorContext.beforeMayNeedTerminalPunctuation
+    else {
+        return preservedLeadingWhitespace + trimmedAdapted
+    }
+
+    let stripped = String(trimmedAdapted.drop(while: { leadingInsertionPunctuation.contains($0) || isWhitespaceCharacter($0) }))
+    guard !stripped.isEmpty else {
+        return trimmedCandidate
+    }
+
+    return preservedLeadingWhitespace + stripped
+}
+
+func stripTrailingCopiedAfterContext(
+    from adaptedText: String,
+    candidateText: String,
+    editorContext: FocusedTextContext
+) -> String {
+    let normalizedAfter = editorContext.textAfterSelection.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !normalizedAfter.isEmpty {
+        let lowercasedAdapted = adaptedText.lowercased()
+        let lowercasedAfter = normalizedAfter.lowercased()
+        if lowercasedAdapted.hasSuffix(lowercasedAfter) {
+            let cutoff = adaptedText.index(adaptedText.endIndex, offsetBy: -normalizedAfter.count)
+            let prefix = String(adaptedText[..<cutoff]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if matchesCandidateLettersLoosely(prefix, candidateText: candidateText) {
+                return prefix
+            }
+        }
+    }
+
+    guard adaptedText.hasPrefix(candidateText) else {
+        return adaptedText
+    }
+
+    let suffix = String(adaptedText.dropFirst(candidateText.count))
+    guard !suffix.isEmpty, !normalizedAfter.isEmpty else {
+        return adaptedText
+    }
+
+    let trimmedSuffix = suffix.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedSuffix.isEmpty, normalizedAfter.hasPrefix(trimmedSuffix) else {
+        return adaptedText
+    }
+
+    return candidateText
+}
+
+func normalizeBoundaryCapitalization(
+    in adaptedText: String,
+    candidateText: String,
+    editorContext: FocusedTextContext
+) -> String {
+    guard !adaptedText.isEmpty else {
+        return adaptedText
+    }
+
+    let punctuationNormalized = stripUnexpectedTerminalPunctuation(
+        from: adaptedText,
+        candidateText: candidateText,
+        editorContext: editorContext
+    )
+
+    if
+        punctuationNormalized == candidateText,
+        let before = editorContext.beforeLastNonWhitespaceCharacter,
+        ".!?".contains(before)
+    {
+        return uppercasingLeadingLetter(in: punctuationNormalized)
+    }
+
+    if
+        matchesCandidateLettersLoosely(punctuationNormalized, candidateText: candidateText),
+        let before = editorContext.beforeLastNonWhitespaceCharacter,
+        before.isLetter,
+        let after = editorContext.afterFirstNonWhitespaceCharacter,
+        after.isLetter,
+        looksLikeCapitalizedSentenceStart(punctuationNormalized)
+    {
+        return lowercasingLeadingLetter(in: stripTerminalPunctuation(from: punctuationNormalized))
+    }
+
+    return punctuationNormalized
+}
+
+func uppercasingLeadingLetter(in text: String) -> String {
+    guard let firstIndex = text.firstIndex(where: \.isLetter) else {
+        return text
+    }
+
+    let uppercased = String(text[firstIndex]).uppercased()
+    guard uppercased.count == 1, let replacement = uppercased.first else {
+        return text
+    }
+
+    var result = text
+    result.replaceSubrange(firstIndex ... firstIndex, with: [replacement])
+    return result
+}
+
+func lowercasingLeadingLetter(in text: String) -> String {
+    guard let firstIndex = text.firstIndex(where: \.isLetter) else {
+        return text
+    }
+
+    let lowercased = String(text[firstIndex]).lowercased()
+    guard lowercased.count == 1, let replacement = lowercased.first else {
+        return text
+    }
+
+    var result = text
+    result.replaceSubrange(firstIndex ... firstIndex, with: [replacement])
+    return result
+}
+
+func looksLikeCapitalizedSingleWord(_ text: String) -> Bool {
+    let words = text.split(whereSeparator: \.isWhitespace)
+    guard words.count == 1, let first = words.first else {
+        return false
+    }
+
+    let word = String(first)
+    guard let firstCharacter = word.first, firstCharacter.isUppercase else {
+        return false
+    }
+
+    let remainder = word.dropFirst()
+    return remainder.allSatisfy { !$0.isLetter || $0.isLowercase }
+}
+
+func looksLikeCapitalizedSentenceStart(_ text: String) -> Bool {
+    let stripped = stripTerminalPunctuation(from: text)
+    return looksLikeCapitalizedSingleWord(stripped)
+}
+
+func stripUnexpectedTerminalPunctuation(
+    from adaptedText: String,
+    candidateText: String,
+    editorContext: FocusedTextContext
+) -> String {
+    guard
+        !candidateText.isEmpty,
+        !adaptedText.isEmpty,
+        !candidateEndsWithTerminalPunctuation(candidateText),
+        let before = editorContext.beforeLastNonWhitespaceCharacter,
+        before.isLetter,
+        let after = editorContext.afterFirstNonWhitespaceCharacter,
+        after.isLetter,
+        matchesCandidateLettersLoosely(adaptedText, candidateText: candidateText)
+    else {
+        return adaptedText
+    }
+
+    return stripTerminalPunctuation(from: adaptedText)
+}
+
+func candidateEndsWithTerminalPunctuation(_ text: String) -> Bool {
+    guard let last = text.last(where: { !isWhitespaceCharacter($0) }) else {
+        return false
+    }
+
+    return ".!?".contains(last)
+}
+
+func stripTerminalPunctuation(from text: String) -> String {
+    var result = text
+    while let last = result.last, ".!?".contains(last) {
+        result.removeLast()
+    }
+    return result.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+func matchesCandidateLettersLoosely(_ adaptedText: String, candidateText: String) -> Bool {
+    normalizedLettersOnly(adaptedText) == normalizedLettersOnly(candidateText)
+}
+
+func normalizedLettersOnly(_ text: String) -> String {
+    String(text.filter { $0.isLetter }.map { Character(String($0).lowercased()) })
+}
+
+do {
+    let arguments = try parseArguments()
+    let fullText = arguments.before + arguments.selected + arguments.after
+    let context = FocusedTextContext(
+        applicationName: "Harness",
+        fullText: fullText,
+        caretLocation: arguments.before.count,
+        selectedLength: arguments.selected.count,
+        textBeforeSelection: arguments.before,
+        selectedText: arguments.selected,
+        textAfterSelection: arguments.after
+    )
+
+    let sanitized = sanitizeAdaptedInsertion(
+        arguments.adaptedText,
+        candidateText: arguments.originalCandidateText,
+        editorContext: context
+    )
+    FileHandle.standardOutput.write(Data(context.formatForInsertion(sanitized).utf8))
+} catch {
+    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+    exit(1)
+}

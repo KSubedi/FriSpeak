@@ -1,0 +1,265 @@
+[
+  {
+    "name": "simple_cleanup",
+    "mode": "transform",
+    "input": "hello uh can you send that update tomorrow morning",
+    "expected_contains": [
+      "Hello",
+      "tomorrow morning"
+    ],
+    "expected_not_contains": [
+      "control_instructions",
+      "dictated_text",
+      " uh "
+    ]
+  },
+  {
+    "name": "proper_nouns",
+    "mode": "transform",
+    "input": "Claude Code ra Codex ko prayog garera prompt optimizer banau. echowin ko naam thik rakhnu.",
+    "expected_contains": [
+      "Claude Code",
+      "Codex",
+      "echowin"
+    ],
+    "expected_not_contains": [
+      "Echowin"
+    ]
+  },
+  {
+    "name": "grammar_cleanup",
+    "mode": "transform",
+    "input": "please make this more better and optimize it for mercury inception models",
+    "expected_contains": [
+      "Mercury"
+    ],
+    "expected_not_contains": [
+      "```",
+      "Here is"
+    ]
+  },
+  {
+    "name": "emoji_spoken_name",
+    "mode": "transform",
+    "input": "checkmark emoji add gara",
+    "expected_one_of": [
+      "\u2713 add gara",
+      "\u2705 add gara"
+    ]
+  },
+  {
+    "name": "standalone_spoken_emoji_name",
+    "mode": "transform",
+    "input": "Kiss you face emoji.",
+    "expected_equals": "😘"
+  },
+  {
+    "name": "no_prompt_echo",
+    "mode": "transform",
+    "input": "Please send the update tomorrow morning.",
+    "expected_not_contains": [
+      "Claude Code",
+      "control_instructions",
+      "Return only the final transformed text"
+    ]
+  },
+  {
+    "name": "preserve_meaningful_discourse_marker",
+    "mode": "transform",
+    "input": "Whatever, I'll come tomorrow.",
+    "expected_equals": "Whatever, I'll come tomorrow."
+  },
+  {
+    "name": "preserve_meaningful_discourse_marker_variant",
+    "mode": "transform",
+    "input": "Whatever, I might actually show up.",
+    "expected_equals": "Whatever, I might actually show up."
+  },
+  {
+    "name": "do_not_answer_question",
+    "mode": "transform",
+    "input": "How are you doing today?",
+    "expected_equals": "How are you doing today?"
+  },
+  {
+    "name": "word_join_add_spaces",
+    "mode": "insertion",
+    "candidate_text": "there",
+    "before": "hello",
+    "after": "world",
+    "expected_equals": " there "
+  },
+  {
+    "name": "after_comma_keep_trailing_space",
+    "mode": "insertion",
+    "candidate_text": "there",
+    "before": "hello, ",
+    "after": "world",
+    "expected_equals": "there "
+  },
+  {
+    "name": "inside_parentheses_no_padding",
+    "mode": "insertion",
+    "candidate_text": "test",
+    "before": "(",
+    "after": ")",
+    "expected_equals": "test"
+  },
+  {
+    "name": "inside_quotes_no_padding",
+    "mode": "insertion",
+    "candidate_text": "hello",
+    "before": "He said, \"",
+    "after": "\"",
+    "expected_equals": "hello"
+  },
+  {
+    "name": "replace_selection_minimal",
+    "mode": "insertion",
+    "candidate_text": "a concise update",
+    "before": "Please send ",
+    "selected": "something",
+    "after": " by noon.",
+    "expected_equals": "a concise update"
+  },
+  {
+    "name": "sentence_continuation_no_extra_period",
+    "mode": "insertion",
+    "candidate_text": ". thanks",
+    "before": "I sent the file",
+    "after": "",
+    "expected_equals": ". thanks"
+  },
+  {
+    "name": "newline_list_item_indentation",
+    "mode": "insertion",
+    "candidate_text": "- apples",
+    "before": "Shopping list:\n",
+    "after": "",
+    "expected_equals": "- apples"
+  },
+  {
+    "name": "sentence_start_capitalization",
+    "mode": "insertion",
+    "candidate_text": "thanks for the update",
+    "before": "I reviewed it. ",
+    "after": "",
+    "expected_equals": "Thanks for the update"
+  },
+  {
+    "name": "mid_sentence_lowercase",
+    "mode": "insertion",
+    "candidate_text": "This",
+    "before": "I think ",
+    "after": " will help.",
+    "expected_equals": "this"
+  },
+  {
+    "name": "before_comma_no_trailing_space",
+    "mode": "insertion",
+    "candidate_text": "there",
+    "before": "hello",
+    "after": ", world",
+    "expected_equals": " there"
+  },
+  {
+    "name": "before_period_no_trailing_space",
+    "mode": "insertion",
+    "candidate_text": "today",
+    "before": "Please send it",
+    "after": ".",
+    "expected_equals": " today"
+  },
+  {
+    "name": "preserve_opening_paren_in_candidate",
+    "mode": "insertion",
+    "candidate_text": "(draft)",
+    "before": "Status: ",
+    "after": "",
+    "expected_equals": "(draft)"
+  },
+  {
+    "name": "replace_selection_inside_quotes",
+    "mode": "insertion",
+    "candidate_text": "hello there",
+    "before": "He wrote, \"",
+    "selected": "hi",
+    "after": "\" yesterday.",
+    "expected_equals": "hello there"
+  },
+  {
+    "name": "keep_list_bullet_with_indent",
+    "mode": "insertion",
+    "candidate_text": "- follow up with design",
+    "before": "Next steps:\n  ",
+    "after": "",
+    "expected_equals": "- follow up with design"
+  },
+  {
+    "name": "preserve_leading_question_mark",
+    "mode": "insertion",
+    "candidate_text": "? maybe tomorrow",
+    "before": "Are you free",
+    "after": "",
+    "expected_equals": "? maybe tomorrow"
+  },
+  {
+    "name": "insert_between_words_with_existing_spaces",
+    "mode": "insertion",
+    "candidate_text": "really",
+    "before": "That was ",
+    "after": " helpful.",
+    "expected_equals": "really"
+  },
+  {
+    "name": "mid_sentence_no_added_period_or_caps",
+    "mode": "insertion",
+    "candidate_text": "finally",
+    "before": "The world is",
+    "after": " ready.",
+    "expected_equals": " finally"
+  },
+  {
+    "name": "mid_sentence_plain_word_before_space",
+    "mode": "insertion",
+    "candidate_text": "absolutely",
+    "before": "That is",
+    "after": " correct.",
+    "expected_equals": " absolutely"
+  },
+  {
+    "name": "mid_sentence_copied_after_context_with_period",
+    "mode": "insertion",
+    "candidate_text": "finally",
+    "before": "The package is",
+    "after": " here.",
+    "expected_equals": " finally"
+  },
+  {
+    "name": "replace_selection_mid_sentence_fragment",
+    "mode": "insertion",
+    "candidate_text": "Going to be home.",
+    "before": "The package is finally here. We should go there tomorrow. What time were you ",
+    "selected": "coming",
+    "after": " again?",
+    "expected_equals": "going to be home"
+  },
+  {
+    "name": "replace_selection_lowercase_before_period",
+    "mode": "insertion",
+    "candidate_text": "A long time.",
+    "before": "What time are you going to be home again? Don't tell me it's gonna take ",
+    "selected": "a while",
+    "after": ". You should be home by now.",
+    "expected_equals": "a long time"
+  },
+  {
+    "name": "replace_selection_capitalized_mid_sentence_before_period",
+    "mode": "insertion",
+    "candidate_text": "A lot of time.",
+    "before": "What time are you going to be home again? Don't tell me it's gonna take ",
+    "selected": "A long time",
+    "after": ". You should be home by now.",
+    "expected_equals": "a lot of time"
+  }
+]

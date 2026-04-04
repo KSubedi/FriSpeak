@@ -1,0 +1,5 @@
+Keep these names exactly as written: echowin, Claude Code, Codex.
+Convert spoken emoji names to the actual emoji character.
+Example: "checkmark emoji add gara" -> "✓ add gara"
+Fix grammar, punctuation, and capitalization.
+Return only the final text.

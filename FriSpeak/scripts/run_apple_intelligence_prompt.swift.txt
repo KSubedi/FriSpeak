@@ -1,0 +1,97 @@
+import Foundation
+import FoundationModels
+
+struct Arguments {
+    let systemPrompt: String
+    let userInput: String
+}
+
+enum HarnessError: LocalizedError {
+    case missingArgument(String)
+    case modelUnavailable(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .missingArgument(name):
+            return "Missing required argument: \(name)"
+        case let .modelUnavailable(reason):
+            return reason
+        }
+    }
+}
+
+func parseArguments() throws -> Arguments {
+    var iterator = CommandLine.arguments.dropFirst().makeIterator()
+    var systemPrompt: String?
+    var userInput: String?
+
+    while let argument = iterator.next() {
+        switch argument {
+        case "--system-prompt":
+            systemPrompt = iterator.next()
+        case "--user-input":
+            userInput = iterator.next()
+        default:
+            continue
+        }
+    }
+
+    guard let systemPrompt else {
+        throw HarnessError.missingArgument("--system-prompt")
+    }
+
+    guard let userInput else {
+        throw HarnessError.missingArgument("--user-input")
+    }
+
+    return Arguments(systemPrompt: systemPrompt, userInput: userInput)
+}
+
+func availabilityDescription(for model: SystemLanguageModel) -> String {
+    switch model.availability {
+    case .available:
+        return "Apple Intelligence is ready on this Mac."
+    case .unavailable(.deviceNotEligible):
+        return "This Mac is not eligible for Apple Intelligence."
+    case .unavailable(.appleIntelligenceNotEnabled):
+        return "Apple Intelligence is turned off on this Mac."
+    case .unavailable(.modelNotReady):
+        return "Apple Intelligence is still downloading or preparing its model."
+    @unknown default:
+        return "Apple Intelligence is currently unavailable."
+    }
+}
+
+let semaphore = DispatchSemaphore(value: 0)
+var exitCode = 0
+
+Task {
+    do {
+        let arguments = try parseArguments()
+        let model = SystemLanguageModel(
+            useCase: .general,
+            guardrails: .permissiveContentTransformations
+        )
+
+        guard model.isAvailable else {
+            throw HarnessError.modelUnavailable(availabilityDescription(for: model))
+        }
+
+        let session = LanguageModelSession(model: model, instructions: arguments.systemPrompt)
+        let response = try await session.respond(
+            to: arguments.userInput,
+            options: GenerationOptions(temperature: 0)
+        )
+
+        FileHandle.standardOutput.write(Data(response.content.utf8))
+    } catch {
+        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        FileHandle.standardError.write(Data((message + "\n").utf8))
+        exitCode = 1
+    }
+
+    semaphore.signal()
+}
+
+semaphore.wait()
+exit(Int32(exitCode))

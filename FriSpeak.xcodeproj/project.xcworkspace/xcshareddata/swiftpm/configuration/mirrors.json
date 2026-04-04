@@ -1,0 +1,9 @@
+{
+  "object" : [
+    {
+      "mirror" : "file:///Users/kaushal/workspace/XCode/FriSpeak/Vendor/mlx-swift",
+      "original" : "https://github.com/ml-explore/mlx-swift"
+    }
+  ],
+  "version" : 1
+}
