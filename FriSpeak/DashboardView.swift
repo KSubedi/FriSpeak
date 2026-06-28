@@ -8,6 +8,21 @@ import Combine
 import SwiftUI
 import Carbon.HIToolbox
 
+extension View {
+    func liquidGlassCard(cornerRadius: CGFloat = 16, padding: CGFloat = 20) -> some View {
+        self
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+    }
+
+    func liquidGlassChrome() -> some View {
+        self
+            .padding(20)
+            .background(.ultraThinMaterial)
+    }
+}
+
 private let intelligencePromptPlaceholder = """
 Optional extra instructions, for example:
 • Keep it terse
@@ -19,16 +34,68 @@ Optional extra instructions, for example:
 
 struct DashboardView: View {
     @EnvironmentObject private var appState: AppState
-    
+
     var body: some View {
-        Group {
-            if appState.hasCompletedOnboarding {
-                SettingsView()
-            } else {
-                OnboardingFlowView()
+        ZStack {
+            LiquidAuroraBackground()
+
+            Group {
+                if appState.hasCompletedOnboarding {
+                    SettingsView()
+                } else {
+                    OnboardingFlowView()
+                }
             }
         }
         .frame(minWidth: 650, minHeight: 450)
+    }
+}
+
+private struct LiquidAuroraBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            (colorScheme == .dark
+                ? Color(red: 0.07, green: 0.08, blue: 0.12)
+                : Color(red: 0.94, green: 0.95, blue: 0.99))
+
+            Canvas { context, size in
+                let blobs: [(Color, CGPoint, CGFloat)] = colorScheme == .dark ? [
+                    (Color(red: 0.35, green: 0.25, blue: 0.85), CGPoint(x: size.width * 0.15, y: size.height * 0.20), max(size.width, size.height) * 0.55),
+                    (Color(red: 0.95, green: 0.30, blue: 0.55), CGPoint(x: size.width * 0.85, y: size.height * 0.15), max(size.width, size.height) * 0.50),
+                    (Color(red: 0.20, green: 0.65, blue: 0.95), CGPoint(x: size.width * 0.30, y: size.height * 0.85), max(size.width, size.height) * 0.60),
+                    (Color(red: 0.55, green: 0.30, blue: 0.95), CGPoint(x: size.width * 0.90, y: size.height * 0.90), max(size.width, size.height) * 0.55),
+                ] : [
+                    (Color(red: 0.55, green: 0.65, blue: 1.00), CGPoint(x: size.width * 0.10, y: size.height * 0.10), max(size.width, size.height) * 0.55),
+                    (Color(red: 1.00, green: 0.55, blue: 0.75), CGPoint(x: size.width * 0.90, y: size.height * 0.20), max(size.width, size.height) * 0.50),
+                    (Color(red: 0.55, green: 0.90, blue: 0.95), CGPoint(x: size.width * 0.25, y: size.height * 0.85), max(size.width, size.height) * 0.60),
+                    (Color(red: 0.80, green: 0.65, blue: 1.00), CGPoint(x: size.width * 0.85, y: size.height * 0.95), max(size.width, size.height) * 0.55),
+                ]
+
+                for (color, center, radius) in blobs {
+                    let gradient = Gradient(stops: [
+                        .init(color: color.opacity(0.85), location: 0.0),
+                        .init(color: color.opacity(0.0), location: 1.0)
+                    ])
+                    context.fill(
+                        Circle().path(in: CGRect(
+                            x: center.x - radius,
+                            y: center.y - radius,
+                            width: radius * 2,
+                            height: radius * 2
+                        )),
+                        with: .radialGradient(
+                            gradient,
+                            center: center,
+                            startRadius: 0,
+                            endRadius: radius
+                        )
+                    )
+                }
+            }
+            .blur(radius: 70)
+        }
     }
 }
 
@@ -37,22 +104,13 @@ struct DashboardView: View {
 private struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @State private var selectedTab: SettingsTab = .general
-    
+
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                ForEach(SettingsTab.allCases) { tab in
-                    SettingsTabButton(
-                        tab: tab,
-                        isSelected: selectedTab == tab
-                    ) {
-                        selectedTab = tab
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 14)
-            .background(.bar)
+            LiquidTabBar(selection: $selectedTab)
+                .padding(.horizontal, 20)
+                .padding(.top, 16)
+                .padding(.bottom, 14)
 
             Group {
                 switch selectedTab {
@@ -71,40 +129,43 @@ private struct SettingsView: View {
     }
 }
 
-private struct SettingsTabButton: View {
-    let tab: SettingsTab
-    let isSelected: Bool
-    let action: () -> Void
-
-    @State private var isHovered = false
+private struct LiquidTabBar: View {
+    @Binding var selection: SettingsTab
+    @Namespace private var tabNamespace
 
     var body: some View {
-        Button(action: action) {
-            Label(tab.title, systemImage: tab.systemImage)
-                .font(.system(size: 13, weight: .semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .padding(.horizontal, 12)
-                .contentShape(RoundedRectangle(cornerRadius: 10))
-                .background(backgroundFill)
+        GlassEffectContainer(spacing: 8) {
+            HStack(spacing: 4) {
+                ForEach(SettingsTab.allCases) { tab in
+                    Button {
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                            selection = tab
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: tab.systemImage)
+                                .font(.system(size: 12, weight: .semibold))
+                            Text(tab.title)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundStyle(selection == tab ? Color.primary : Color.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                        .background {
+                            if selection == tab {
+                                Capsule()
+                                    .fill(Color.accentColor.opacity(0.22))
+                                    .matchedGeometryEffect(id: "liquidTab", in: tabNamespace)
+                            }
+                        }
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(5)
+            .glassEffect(.regular.interactive(), in: .capsule)
         }
-        .buttonStyle(.plain)
-        .contentShape(RoundedRectangle(cornerRadius: 10))
-        .foregroundStyle(isSelected ? Color.primary : (isHovered ? Color.primary : Color.secondary))
-        .onHover { hovering in
-            isHovered = hovering
-        }
-        .animation(.easeOut(duration: 0.12), value: isHovered)
-        .animation(.easeOut(duration: 0.12), value: isSelected)
-    }
-
-    private var backgroundFill: some View {
-        RoundedRectangle(cornerRadius: 10)
-            .fill(
-                isSelected
-                    ? Color.accentColor.opacity(0.14)
-                    : (isHovered ? Color.secondary.opacity(0.12) : Color.clear)
-            )
     }
 }
 
@@ -158,8 +219,7 @@ private struct GeneralSettingsView: View {
                             .foregroundStyle(appState.captureState == .idle ? Color.accentColor : Color.orange)
                             .symbolEffect(.pulse, isActive: appState.captureState != .idle)
                             .frame(width: 40, height: 40)
-                            .background(Color.secondary.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .glassEffect(.regular, in: .rect(cornerRadius: 12))
 
                         VStack(alignment: .leading, spacing: 4) {
                             Label("General", systemImage: "slider.horizontal.3")
@@ -193,8 +253,7 @@ private struct GeneralSettingsView: View {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
 
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Push-to-Talk Shortcut", systemImage: "command.square")
@@ -208,8 +267,7 @@ private struct GeneralSettingsView: View {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
 
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Last Transcription", systemImage: "waveform.badge.mic")
@@ -223,16 +281,14 @@ private struct GeneralSettingsView: View {
                         Text(appState.lastTranscript)
                             .font(.body)
                             .textSelection(.enabled)
-                            .padding(12)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.secondary.opacity(0.08))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: .rect(cornerRadius: 12))
                     }
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
 
                 VStack(alignment: .leading, spacing: 10) {
                     Label("Actions", systemImage: "bolt.horizontal.circle")
@@ -245,7 +301,8 @@ private struct GeneralSettingsView: View {
                             Label("Run Setup Again", systemImage: "arrow.counterclockwise")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
+                        .controlSize(.large)
 
                         Button {
                             NSApp.terminate(nil)
@@ -253,13 +310,13 @@ private struct GeneralSettingsView: View {
                             Label("Quit FriSpeak", systemImage: "power")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
+                        .controlSize(.large)
                     }
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
 
                 VStack(alignment: .leading, spacing: 14) {
                     Label("Listening Audio", systemImage: "speaker.wave.2")
@@ -295,8 +352,7 @@ private struct GeneralSettingsView: View {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
 
                 VStack(alignment: .leading, spacing: 14) {
                     Label("System", systemImage: "macwindow.badge.plus")
@@ -331,8 +387,7 @@ private struct GeneralSettingsView: View {
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
             }
             .padding(20)
         }
@@ -368,8 +423,7 @@ private struct GeneralMetricCard: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(nsColor: .windowBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 }
 
@@ -379,26 +433,16 @@ private struct IntelligenceSettingsView: View {
     @EnvironmentObject private var appState: AppState
     
     var body: some View {
-        HSplitView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    ConfigurationOverviewCard()
-                    SpeechConfigurationCard()
-                    IntelligenceFeaturesConfigurationCard()
-                }
-                .padding(20)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                ConfigurationOverviewCard()
+                SpeechConfigurationCard()
+                IntelligenceFeaturesConfigurationCard()
+                OpenRouterConfigurationCard()
             }
-            .frame(minWidth: 420, idealWidth: 620, maxWidth: .infinity, maxHeight: .infinity)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    OpenRouterConfigurationCard()
-                }
-                .padding(20)
-            }
-            .frame(minWidth: 320, idealWidth: 420, maxWidth: 520, maxHeight: .infinity)
+            .padding(20)
         }
-        .background(Color.secondary.opacity(0.04))
+        .background(.ultraThinMaterial)
     }
 }
 
@@ -430,8 +474,7 @@ private struct ConfigurationOverviewCard: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 }
 
@@ -439,104 +482,203 @@ private struct SpeechConfigurationCard: View {
     @EnvironmentObject private var appState: AppState
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Speech Model")
-                .font(.headline)
-
-            HStack(spacing: 12) {
-                SpeechModeOptionButton(
-                    title: DictationMode.localNative.title,
-                    summary: "Apple Speech Recognition on device",
-                    icon: DictationMode.localNative.systemImage,
-                    isSelected: appState.dictationMode == .localNative,
-                    isDisabled: false
-                ) {
-                    appState.dictationMode = .localNative
-                }
-
-                SpeechModeOptionButton(
-                    title: DictationMode.localGenerative.title,
-                    summary: "Local speech models through speech-swift",
-                    icon: DictationMode.localGenerative.systemImage,
-                    isSelected: appState.dictationMode == .localGenerative,
-                    isDisabled: false
-                ) {
-                    appState.dictationMode = .localGenerative
-                }
-
-                SpeechModeOptionButton(
-                    title: DictationMode.remote.title,
-                    summary: appState.hasConfiguredOpenRouter ? "OpenRouter speech pipeline" : "Requires OpenRouter setup below",
-                    icon: DictationMode.remote.systemImage,
-                    isSelected: appState.dictationMode == .remote,
-                    isDisabled: !appState.hasConfiguredOpenRouter
-                ) {
-                    appState.dictationMode = .remote
-                }
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Label("Speech Model", systemImage: "waveform.and.mic")
+                    .font(.headline)
+                Spacer()
             }
 
-            if appState.dictationMode == .localGenerative {
-                LocalGenerativeModelSection()
-            } else if appState.dictationMode == .localNative {
-                Text("Apple native speech. No setup required.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else if !appState.hasConfiguredOpenRouter {
-                Text("Remote speech is unavailable until OpenRouter is configured.")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+            SpeechModeSegmentedPicker(selection: $appState.dictationMode)
+                .disabled(!appState.hasConfiguredOpenRouter && appState.dictationMode == .remote)
+                .opacity((!appState.hasConfiguredOpenRouter && appState.dictationMode == .remote) ? 0.6 : 1)
+
+            Group {
+                switch appState.dictationMode {
+                case .localNative:
+                    SpeechModeDetail(
+                        icon: "internaldrive",
+                        title: "Apple Speech",
+                        message: "On-device speech recognition. No model download required.",
+                        tint: .blue
+                    )
+                case .localGenerative:
+                    LocalGenerativeModelSection()
+                case .remote:
+                    if appState.hasConfiguredOpenRouter {
+                        SpeechModeDetail(
+                            icon: "network",
+                            title: "OpenRouter Pipeline",
+                            message: "Cloud speech through the selected OpenRouter model. Requires an active API key.",
+                            tint: .pink
+                        )
+                    } else {
+                        SpeechModeDetail(
+                            icon: "exclamationmark.triangle.fill",
+                            title: "Setup Required",
+                            message: "Configure your OpenRouter API key below to enable remote speech.",
+                            tint: .orange
+                        )
+                    }
+                }
             }
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: appState.dictationMode)
+    }
+}
+
+private struct SpeechModeSegmentedPicker: View {
+    @Binding var selection: DictationMode
+    @Namespace private var pickerNamespace
+
+    var body: some View {
+        GlassEffectContainer(spacing: 6) {
+            HStack(spacing: 4) {
+                ForEach(DictationMode.allCases) { mode in
+                    Button {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                            selection = mode
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: mode.systemImage)
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(mode.title)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundStyle(selection == mode ? Color.primary : Color.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background {
+                            if selection == mode {
+                                Capsule()
+                                    .fill(Color.accentColor.opacity(0.22))
+                                    .matchedGeometryEffect(id: "speechMode", in: pickerNamespace)
+                            }
+                        }
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(4)
+            .glassEffect(.regular.interactive(), in: .capsule)
+        }
+    }
+}
+
+private struct SpeechModeDetail: View {
+    let icon: String
+    let title: String
+    let message: String
+    let tint: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 28, height: 28)
+                .glassEffect(.regular, in: .rect(cornerRadius: 8))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 }
 
 private struct LocalGenerativeModelSection: View {
     @EnvironmentObject private var appState: AppState
+    @Namespace private var modelNamespace
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Picker("Local model", selection: $appState.localSpeechBackend) {
-                ForEach(LocalSpeechBackend.allCases) { backend in
-                    Text(backend.title).tag(backend)
+        VStack(alignment: .leading, spacing: 12) {
+            GlassEffectContainer(spacing: 6) {
+                HStack(spacing: 4) {
+                    ForEach(LocalSpeechBackend.allCases) { backend in
+                        Button {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                                appState.localSpeechBackend = backend
+                            }
+                        } label: {
+                            Text(backend.title)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(appState.localSpeechBackend == backend ? Color.primary : Color.secondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 6)
+                                .background {
+                                    if appState.localSpeechBackend == backend {
+                                        Capsule()
+                                            .fill(Color.accentColor.opacity(0.22))
+                                            .matchedGeometryEffect(id: "localModel", in: modelNamespace)
+                                    }
+                                }
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .padding(4)
+                .glassEffect(.regular.interactive(), in: .capsule)
             }
-            .pickerStyle(.segmented)
+
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: "cpu")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Text(appState.localSpeechBackend.acceleratorLabel)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
 
             Text(appState.localSpeechBackend.summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Button {
-                Task {
-                    await appState.downloadLocalQwenModel()
+            HStack(spacing: 10) {
+                Button {
+                    Task { await appState.downloadLocalQwenModel() }
+                } label: {
+                    Label(
+                        appState.localQwenModelCached ? "Redownload" : "Download",
+                        systemImage: appState.localQwenDownloadInProgress ? "arrow.down.circle.fill" : "square.and.arrow.down"
+                    )
+                    .frame(maxWidth: .infinity)
                 }
-            } label: {
-                Label(
-                    appState.localQwenModelCached ? "Redownload \(appState.localSpeechBackend.title)" : "Download \(appState.localSpeechBackend.title)",
-                    systemImage: appState.localQwenDownloadInProgress ? "arrow.down.circle.fill" : "square.and.arrow.down"
-                )
+                .buttonStyle(.glassProminent)
+                .disabled(appState.localQwenDownloadInProgress)
+
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(statusColor)
+                        .frame(width: 8, height: 8)
+                    Text(statusLabel)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .frame(maxHeight: 28)
+                .glassEffect(.regular, in: .capsule)
             }
-            .buttonStyle(.borderedProminent)
-            .disabled(appState.localQwenDownloadInProgress)
 
             if appState.localQwenDownloadInProgress {
                 ProgressView(value: appState.localQwenDownloadProgress)
-                Text(appState.localQwenDownloadStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             } else if appState.localQwenPreloadInProgress {
                 ProgressView()
-                Text(appState.localQwenDownloadStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                Text(appState.localQwenModelCached ? "\(appState.localSpeechBackend.title) cached locally and ready." : "\(appState.localSpeechBackend.title) is not downloaded yet.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
             if let localQwenLastError = appState.localQwenLastError, !localQwenLastError.isEmpty {
@@ -545,6 +687,20 @@ private struct LocalGenerativeModelSection: View {
                     .foregroundStyle(.orange)
             }
         }
+    }
+
+    private var statusColor: Color {
+        if appState.localQwenDownloadInProgress || appState.localQwenPreloadInProgress {
+            return .orange
+        }
+        return appState.localQwenModelCached ? .green : .secondary
+    }
+
+    private var statusLabel: String {
+        if appState.localQwenDownloadInProgress || appState.localQwenPreloadInProgress {
+            return appState.localQwenDownloadStatus.isEmpty ? "Working…" : appState.localQwenDownloadStatus
+        }
+        return appState.localQwenModelCached ? "Ready" : "Not downloaded"
     }
 }
 
@@ -573,8 +729,7 @@ private struct OpenRouterConfigurationCard: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 }
 
@@ -593,7 +748,7 @@ private struct LocalBonsaiModelSection: View {
                     systemImage: appState.localBonsaiDownloadInProgress ? "arrow.down.circle.fill" : "square.and.arrow.down"
                 )
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.glassProminent)
             .disabled(appState.localBonsaiDownloadInProgress || appState.localBonsaiCompatibilityIssue != nil)
 
             if appState.localBonsaiDownloadInProgress {
@@ -628,8 +783,7 @@ private struct LocalBonsaiModelSection: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 }
 
@@ -647,8 +801,7 @@ private struct IntelligenceFeaturesConfigurationCard: View {
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .glassEffect(.regular, in: .rect(cornerRadius: 16))
     }
 
     @ViewBuilder
@@ -711,8 +864,7 @@ private struct IntelligenceFeaturesConfigurationCard: View {
                     .font(.body)
                     .scrollContentBackground(.hidden)
                     .padding(10)
-                    .background(Color(nsColor: .textBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .glassEffect(.regular, in: .rect(cornerRadius: 12))
 
                 if appState.intelligencePrompt.isEmpty {
                     Text(intelligencePromptPlaceholder)
@@ -730,42 +882,6 @@ private struct IntelligenceFeaturesConfigurationCard: View {
     private var cursorAwarenessSection: some View {
         Toggle("Use Cursor Location Awareness", isOn: $appState.cursorAwarenessEnabled)
             .disabled(!appState.canUseSelectedIntelligenceModel)
-    }
-}
-
-private struct SpeechModeOptionButton: View {
-    let title: String
-    let summary: String
-    let icon: String
-    let isSelected: Bool
-    let isDisabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                Label(title, systemImage: icon)
-                    .font(.subheadline.weight(.semibold))
-                Text(summary)
-                    .font(.caption)
-                    .foregroundStyle(isSelected ? Color.primary : Color.secondary)
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(backgroundFill)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-        }
-        .buttonStyle(.plain)
-        .disabled(isDisabled)
-        .opacity(isDisabled ? 0.55 : 1)
-    }
-
-    private var backgroundFill: Color {
-        if isSelected {
-            return Color.accentColor.opacity(0.14)
-        }
-
-        return Color.secondary.opacity(0.08)
     }
 }
 
@@ -788,8 +904,13 @@ private struct IntelligenceModelOptionButton: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? Color.accentColor.opacity(0.14) : Color.secondary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.accentColor.opacity(0.18))
+                }
+            }
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .disabled(isDisabled)
@@ -809,7 +930,7 @@ private struct IntelligenceSidebarView: View {
             }
             .padding(20)
         }
-        .background(.background)
+        .background(.ultraThinMaterial)
     }
 }
 
@@ -836,10 +957,9 @@ private struct IntelligenceStatusCard: View {
                     .foregroundStyle(statusIsHealthy ? .green : .orange)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
     }
 
     private var statusIsHealthy: Bool {
@@ -907,7 +1027,7 @@ private struct IntelligenceProviderCard: View {
                             systemImage: appState.localQwenDownloadInProgress ? "arrow.down.circle.fill" : "square.and.arrow.down"
                         )
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .disabled(appState.localQwenDownloadInProgress)
 
                     if appState.localQwenDownloadInProgress {
@@ -939,7 +1059,9 @@ private struct IntelligenceProviderCard: View {
                         TextEditor(text: $appState.intelligencePrompt)
                             .frame(height: 110)
                             .font(.body)
-                            .border(Color.secondary.opacity(0.3))
+                            .scrollContentBackground(.hidden)
+                            .padding(10)
+                            .glassEffect(.regular, in: .rect(cornerRadius: 12))
                     }
                 }
             } else {
@@ -991,10 +1113,9 @@ private struct IntelligenceProviderCard: View {
                 }
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
     }
 }
 
@@ -1031,10 +1152,9 @@ private struct IntelligenceContextCard: View {
                     .foregroundStyle(.orange)
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
     }
 }
 
@@ -1218,8 +1338,8 @@ private struct AboutView: View {
                     )
                 }
                 .padding(20)
-                .background(Color.secondary.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
                 .padding(.horizontal, 60)
             }
             .padding(.bottom, 40)
@@ -1265,18 +1385,24 @@ private struct HistoryView: View {
     var body: some View {
         HSplitView {
             ZStack {
-                Color(nsColor: .windowBackgroundColor)
-
-                List(appState.history, selection: $selectedEntryID) { entry in
-                    HistoryListRow(entry: entry)
-                        .tag(entry.id)
-                        .listRowBackground(Color(nsColor: .windowBackgroundColor))
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(appState.history) { entry in
+                            Button {
+                                selectedEntryID = entry.id
+                            } label: {
+                                HistoryListRow(
+                                    entry: entry,
+                                    isSelected: selectedEntryID == entry.id
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(8)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
             }
-            .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
+            .frame(minWidth: 170, idealWidth: 240, maxWidth: 300)
 
             Group {
                 if appState.history.isEmpty {
@@ -1297,11 +1423,11 @@ private struct HistoryView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
+            .frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
 
             HistoryConfigurationView()
                 .environmentObject(appState)
-                .frame(minWidth: 260, idealWidth: 300, maxWidth: 340)
+                .frame(minWidth: 170, idealWidth: 240, maxWidth: 300)
         }
         .onAppear {
             if selectedEntryID == nil {
@@ -1332,7 +1458,7 @@ private struct HistoryView: View {
                 .disabled(appState.history.isEmpty)
             }
             .padding()
-            .background(.bar)
+            .glassEffect(.regular, in: .rect(cornerRadius: 14))
         }
     }
 
@@ -1373,8 +1499,8 @@ private struct HistoryConfigurationView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding()
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: 10))
 
                 VStack(alignment: .leading, spacing: 10) {
                     Toggle("Log Audio With History", isOn: $appState.historyAudioLoggingEnabled)
@@ -1384,17 +1510,18 @@ private struct HistoryConfigurationView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding()
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: 10))
             }
             .padding()
         }
-        .background(.background)
+        .background(.ultraThinMaterial)
     }
 }
 
 private struct HistoryListRow: View {
     let entry: CaptureHistoryEntry
+    let isSelected: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -1410,7 +1537,28 @@ private struct HistoryListRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .modifier(HistoryRowGlassModifier(isSelected: isSelected))
+    }
+}
+
+private struct HistoryRowGlassModifier: ViewModifier {
+    let isSelected: Bool
+
+    func body(content: Content) -> some View {
+        if isSelected {
+            content
+                .background {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.accentColor.opacity(0.18))
+                }
+                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
+        } else {
+            content
+        }
     }
 }
 
@@ -1422,20 +1570,37 @@ private struct HistoryEntryDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(entry.timestamp, format: Date.FormatStyle(date: .abbreviated, time: .standard))
-                            .font(.title3.weight(.semibold))
-                        
-                        Text(entry.applicationName ?? "Unknown App")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(entry.timestamp, format: Date.FormatStyle(date: .abbreviated, time: .standard))
+                                .font(.title3.weight(.semibold))
+
+                            Text(entry.applicationName ?? "Unknown App")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button("Copy Log") {
+                            copyToPasteboard(entry.debugDump)
+                        }
                     }
-                    
-                    Spacer()
-                    
-                    Button("Copy Log") {
-                        copyToPasteboard(entry.debugDump)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(entry.timestamp, format: Date.FormatStyle(date: .abbreviated, time: .standard))
+                                .font(.title3.weight(.semibold))
+
+                            Text(entry.applicationName ?? "Unknown App")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Button("Copy Log") {
+                            copyToPasteboard(entry.debugDump)
+                        }
                     }
                 }
                 
@@ -1477,46 +1642,59 @@ private struct HistoryAudioSection: View {
     @ObservedObject var audioPlayer: HistoryAudioPlayer
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("Logged Audio")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 150, alignment: .leading)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                Text("Logged Audio")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 150, alignment: .leading)
 
-            VStack(alignment: .leading, spacing: 10) {
-                if let audioURL {
-                    HStack(spacing: 10) {
-                        Button(audioPlayer.isPlaying ? "Stop" : "Play Audio") {
-                            if audioPlayer.isPlaying {
-                                audioPlayer.stop()
-                            } else {
-                                audioPlayer.play(url: audioURL)
-                            }
-                        }
+                audioContent
+            }
 
-                        Button("Reveal in Finder") {
-                            NSWorkspace.shared.activateFileViewerSelecting([audioURL])
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Logged Audio")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                audioContent
+            }
+        }
+    }
+
+    private var audioContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let audioURL {
+                HStack(spacing: 10) {
+                    Button(audioPlayer.isPlaying ? "Stop" : "Play Audio") {
+                        if audioPlayer.isPlaying {
+                            audioPlayer.stop()
+                        } else {
+                            audioPlayer.play(url: audioURL)
                         }
-                        .buttonStyle(.borderless)
                     }
 
-                    Text(audioURL.lastPathComponent)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                } else if entry.historyAudioFilename != nil {
-                    Text("Audio file is no longer available on disk.")
-                        .font(.body.monospaced())
-                } else {
-                    Text("Unavailable")
-                        .font(.body.monospaced())
+                    Button("Reveal in Finder") {
+                        NSWorkspace.shared.activateFileViewerSelecting([audioURL])
+                    }
+                    .buttonStyle(.borderless)
                 }
+
+                Text(audioURL.lastPathComponent)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            } else if entry.historyAudioFilename != nil {
+                Text("Audio file is no longer available on disk.")
+                    .font(.body.monospaced())
+            } else {
+                Text("Unavailable")
+                    .font(.body.monospaced())
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.secondary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular, in: .rect(cornerRadius: 8))
     }
 }
 
@@ -1525,20 +1703,33 @@ private struct HistoryTextSection: View {
     let text: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 150, alignment: .leading)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 12) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 150, alignment: .leading)
 
-            Text(text.isEmpty ? "Empty" : text)
-                .font(.body.monospaced())
-                .textSelection(.enabled)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                contentView
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                contentView
+            }
         }
+    }
+
+    private var contentView: some View {
+        Text(text.isEmpty ? "Empty" : text)
+            .font(.body.monospaced())
+            .textSelection(.enabled)
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: .rect(cornerRadius: 8))
     }
 }
 
@@ -1659,7 +1850,7 @@ private struct OnboardingFlowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(32)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(.ultraThinMaterial)
             
             Divider()
             
@@ -1700,14 +1891,15 @@ private struct OnboardingFlowView: View {
                     Button("Back") {
                         withAnimation(.snappy) { stepIndex = max(stepIndex - 1, 0) }
                     }
+                    .buttonStyle(.glass)
                     .controlSize(.large)
                 }
-                
+
                 if currentStep == .ready {
                     Button("Finish Setup") {
                         appState.completeOnboarding()
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .controlSize(.large)
                     .disabled(!canFinishSetup)
                 } else {
@@ -1716,12 +1908,12 @@ private struct OnboardingFlowView: View {
                             stepIndex = min(stepIndex + 1, steps.count - 1)
                         }
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.glassProminent)
                     .controlSize(.large)
                 }
             }
             .padding(20)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(.ultraThinMaterial)
         }
     }
 }
