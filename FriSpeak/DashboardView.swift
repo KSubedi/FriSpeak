@@ -17,8 +17,6 @@ Optional extra instructions, for example:
 • Convert to sentence case
 """
 
-private let builtInPromptingSummary = "Use FriSpeak's built-in cleanup instructions to remove filler words like um and ah, fix obvious grammar and punctuation, and keep the speaker's meaning intact."
-
 struct DashboardView: View {
     @EnvironmentObject private var appState: AppState
     
@@ -345,7 +343,7 @@ private struct GeneralSettingsView: View {
         case .localNative:
             return "Apple ASR"
         case .localGenerative:
-            return "Qwen3-ASR"
+            return "Local Speech"
         case .remote:
             return "OpenRouter"
         }
@@ -412,10 +410,6 @@ private struct ConfigurationOverviewCard: View {
             Label("Configuration", systemImage: "switch.2")
                 .font(.title3.weight(.semibold))
 
-            Text("Choose a speech pipeline, configure OpenRouter once, then optionally layer intelligence on top for cleanup and rewriting.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
             HStack(spacing: 12) {
                 GeneralMetricCard(
                     title: "Speech",
@@ -449,10 +443,6 @@ private struct SpeechConfigurationCard: View {
             Text("Speech Model")
                 .font(.headline)
 
-            Text("Pick the pipeline that handles transcription before any optional intelligence pass.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             HStack(spacing: 12) {
                 SpeechModeOptionButton(
                     title: DictationMode.localNative.title,
@@ -466,7 +456,7 @@ private struct SpeechConfigurationCard: View {
 
                 SpeechModeOptionButton(
                     title: DictationMode.localGenerative.title,
-                    summary: "Qwen3-ASR-1.7B through speech-swift",
+                    summary: "Local speech models through speech-swift",
                     icon: DictationMode.localGenerative.systemImage,
                     isSelected: appState.dictationMode == .localGenerative,
                     isDisabled: false
@@ -488,7 +478,7 @@ private struct SpeechConfigurationCard: View {
             if appState.dictationMode == .localGenerative {
                 LocalGenerativeModelSection()
             } else if appState.dictationMode == .localNative {
-                Text("Apple native speech runs fully on-device and inserts the local transcript directly unless a separate intelligence model is enabled below.")
+                Text("Apple native speech. No setup required.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if !appState.hasConfiguredOpenRouter {
@@ -509,13 +499,24 @@ private struct LocalGenerativeModelSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Picker("Local model", selection: $appState.localSpeechBackend) {
+                ForEach(LocalSpeechBackend.allCases) { backend in
+                    Text(backend.title).tag(backend)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text(appState.localSpeechBackend.summary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             Button {
                 Task {
                     await appState.downloadLocalQwenModel()
                 }
             } label: {
                 Label(
-                    appState.localQwenModelCached ? "Redownload Local Model" : "Download Local Model",
+                    appState.localQwenModelCached ? "Redownload \(appState.localSpeechBackend.title)" : "Download \(appState.localSpeechBackend.title)",
                     systemImage: appState.localQwenDownloadInProgress ? "arrow.down.circle.fill" : "square.and.arrow.down"
                 )
             }
@@ -533,7 +534,7 @@ private struct LocalGenerativeModelSection: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text(appState.localQwenModelCached ? "Model cached locally and ready." : "Model is not downloaded yet.")
+                Text(appState.localQwenModelCached ? "\(appState.localSpeechBackend.title) cached locally and ready." : "\(appState.localSpeechBackend.title) is not downloaded yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -543,10 +544,6 @@ private struct LocalGenerativeModelSection: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
             }
-
-            Text("If intelligence is disabled below, FriSpeak feeds the prompt area directly into the local Qwen speech model.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 }
@@ -566,29 +563,13 @@ private struct OpenRouterConfigurationCard: View {
 
             OpenRouterModelPicker(model: $appState.openRouterModel)
 
-            Text("The selected OpenRouter model is used for remote speech mode and, when enabled below, remote intelligence features.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
-                    Image(systemName: appState.openRouterModelSupportsAudioInput ? "waveform.badge.mic" : "info.circle")
-                        .foregroundStyle(appState.openRouterModelSupportsAudioInput ? .green : .secondary)
-                    Text(appState.openRouterCapabilityStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Text(appState.openRouterModelSupportsAudioInput
-                     ? "FriSpeak will automatically use direct remote audio transcription for remote speech mode when the selected model supports it."
-                     : "If the selected model does not support audio input, FriSpeak falls back to local Apple transcription before any intelligence pass.")
+            HStack(spacing: 8) {
+                Image(systemName: appState.openRouterModelSupportsAudioInput ? "waveform.badge.mic" : "info.circle")
+                    .foregroundStyle(appState.openRouterModelSupportsAudioInput ? .green : .secondary)
+                Text(appState.openRouterCapabilityStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .padding(12)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.secondary.opacity(appState.openRouterModelSupportsAudioInput ? 0.06 : 0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -641,7 +622,7 @@ private struct LocalBonsaiModelSection: View {
                     .foregroundStyle(.orange)
             }
 
-            Text("This uses `prism-ml/Bonsai-8B-mlx-1bit` through MLX for fully local text cleanup and prompting.")
+            Text("Runs Bonsai-8B-mlx-1bit locally via MLX for text cleanup and prompting.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -661,10 +642,6 @@ private struct IntelligenceFeaturesConfigurationCard: View {
                 .font(.headline)
 
             Toggle("Enable intelligence features", isOn: $appState.intelligenceFeaturesEnabled)
-
-            Text("Use a second model to clean up the transcript, apply custom prompting, and optionally do context-aware insertion with the selected intelligence model.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
 
             content
         }
@@ -709,41 +686,17 @@ private struct IntelligenceFeaturesConfigurationCard: View {
                 }
             }
 
-            if appState.intelligenceModel == .apple {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Apple Intelligence works best with simple prompts", systemImage: "exclamationmark.triangle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.orange)
-
-                    Text("Keep prompts short and concrete. Apple Intelligence can misinterpret complex instructions, layered formatting requests, or nuanced editing behavior.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.orange.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-
             if appState.intelligenceModel == .local {
                 LocalBonsaiModelSection()
             }
 
             Toggle("Use built-in cleanup prompting", isOn: $appState.builtInIntelligencePromptingEnabled)
 
-            Text(builtInPromptingSummary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             intelligencePromptEditor
 
             if appState.canUseAppleIntelligence || appState.localBonsaiModelCached || appState.hasConfiguredOpenRouter {
                 cursorAwarenessSection
             }
-        } else {
-            Text("With intelligence disabled, FriSpeak inserts the speech transcript directly. In local generative mode, the prompt area is fed into the Qwen speech model instead.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 
@@ -771,27 +724,12 @@ private struct IntelligenceFeaturesConfigurationCard: View {
                 }
             }
 
-            Text("Use this to steer cleanup, tone, translation, or formatting. With Apple Intelligence, keep the prompt simple. Cursor awareness can now be used with Apple Intelligence, the local Bonsai model, or the remote model.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
     }
 
     private var cursorAwarenessSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle("Use Cursor Location Awareness", isOn: $appState.cursorAwarenessEnabled)
-                .disabled(!appState.canUseSelectedIntelligenceModel)
-
-            Text(appState.canUseSelectedIntelligenceModel
-                 ? "When enabled, FriSpeak sends nearby text around the caret to the selected intelligence model so it can fit the result more naturally."
-                 : "Cursor awareness becomes available when the selected intelligence model is ready.")
-                .font(.caption)
-                .foregroundStyle(appState.canUseSelectedIntelligenceModel ? Color.secondary : Color.orange)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        Toggle("Use Cursor Location Awareness", isOn: $appState.cursorAwarenessEnabled)
+            .disabled(!appState.canUseSelectedIntelligenceModel)
     }
 }
 
@@ -859,118 +797,6 @@ private struct IntelligenceModelOptionButton: View {
     }
 }
 
-private struct IntelligenceInstructionsPane: View {
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 6) {
-                Label(headerTitle, systemImage: "text.badge.sparkles")
-                    .font(.title3.weight(.semibold))
-
-                Text(headerDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            if appState.dictationMode == .remote || appState.dictationMode == .localGenerative {
-                ZStack(alignment: .topLeading) {
-                    TextEditor(text: $appState.intelligencePrompt)
-                        .font(.body)
-                        .scrollContentBackground(.hidden)
-                        .padding(12)
-                        .background(Color(nsColor: .textBackgroundColor))
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                    if appState.intelligencePrompt.isEmpty {
-                        Text(intelligencePromptPlaceholder)
-                            .font(.body)
-                            .foregroundStyle(.tertiary)
-                            .padding(.top, 20)
-                            .padding(.leading, 18)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-                Text(promptHelpText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    Label(localModeTitle, systemImage: appState.dictationMode.systemImage)
-                        .font(.headline)
-                    Text(localModeDescription)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(Color.secondary.opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color.secondary.opacity(0.04))
-    }
-
-    private var headerTitle: String {
-        switch appState.dictationMode {
-        case .localNative:
-            return "Local Native Mode"
-        case .localGenerative:
-            return "Local Generative Mode"
-        case .remote:
-            return "OpenRouter Instructions"
-        }
-    }
-
-    private var headerDescription: String {
-        switch appState.dictationMode {
-        case .localNative:
-            return "Local native mode uses direct Apple Speech Recognition and inserts the local transcript without cloud processing."
-        case .localGenerative:
-            return "Local generative mode uses the on-device Qwen3-ASR-1.7B model. Prompt instructions are sent directly to the local speech model."
-        case .remote:
-            return "These instructions are applied before OpenRouter produces the final inserted text."
-        }
-    }
-
-    private var localModeTitle: String {
-        switch appState.dictationMode {
-        case .localNative:
-            return "Apple Speech on device"
-        case .localGenerative:
-            return "Qwen3-ASR on device"
-        case .remote:
-            return "OpenRouter"
-        }
-    }
-
-    private var localModeDescription: String {
-        switch appState.dictationMode {
-        case .localNative:
-            return "FriSpeak records audio locally, transcribes it with Apple Speech Recognition, and inserts the result directly. Only local caret formatting is applied."
-        case .localGenerative:
-            return "FriSpeak records audio locally, runs the Qwen3-ASR-1.7B model on-device, and inserts the result directly. Download the local model once before using this mode, then use the prompt box to steer formatting, translation, or cleanup."
-        case .remote:
-            return ""
-        }
-    }
-
-    private var promptHelpText: String {
-        switch appState.dictationMode {
-        case .localNative:
-            return ""
-        case .localGenerative:
-            return "Leave this blank to use the default local transcription behavior, or add local instructions like tone, translation, formatting, or romanization."
-        case .remote:
-            return "Leave this blank to use the default cleanup behavior, or add extra instructions like tone, translation, or formatting."
-        }
-    }
-}
-
 private struct IntelligenceSidebarView: View {
     @EnvironmentObject private var appState: AppState
 
@@ -1009,10 +835,6 @@ private struct IntelligenceStatusCard: View {
                 Image(systemName: statusIsHealthy ? "checkmark.circle.fill" : "exclamationmark.circle")
                     .foregroundStyle(statusIsHealthy ? .green : .orange)
             }
-
-            Text("FriSpeak uses the text already in the focused field, when available through Accessibility, to help the selected model fit the insertion into the current sentence or selection.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1047,10 +869,6 @@ private struct IntelligenceProviderCard: View {
             }
             .pickerStyle(.segmented)
 
-            Text("Choose between Apple’s local speech pipeline, the local Qwen3-ASR model, or remote OpenRouter processing.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
             if appState.dictationMode == .remote {
                 OpenRouterAPIKeyHelp()
 
@@ -1059,43 +877,23 @@ private struct IntelligenceProviderCard: View {
 
                 OpenRouterModelPicker(model: $appState.openRouterModel)
 
-                Text("FriSpeak will transcribe speech locally first, then send your instructions, optional caret context, and transcript to OpenRouter. Pick a preset for convenience or choose Custom to paste any model ID.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: appState.openRouterModelSupportsAudioInput ? "waveform.badge.mic" : "info.circle")
-                            .foregroundStyle(appState.openRouterModelSupportsAudioInput ? .green : .secondary)
-                        Text(appState.openRouterCapabilityStatus)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(appState.openRouterModelSupportsAudioInput
-                             ? "FriSpeak automatically sends recorded audio directly to the selected OpenRouter model when it supports audio input."
-                             : "FriSpeak will use built-in local Apple transcription first because this OpenRouter model does not report audio input support.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        if !appState.openRouterModelSupportsAudioInput {
-                            Label("Unavailable for the selected model", systemImage: "slash.circle")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.orange)
-                        }
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.secondary.opacity(appState.openRouterModelSupportsAudioInput ? 0.06 : 0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .opacity(appState.openRouterModelSupportsAudioInput ? 1 : 0.65)
+                HStack(spacing: 8) {
+                    Image(systemName: appState.openRouterModelSupportsAudioInput ? "waveform.badge.mic" : "info.circle")
+                        .foregroundStyle(appState.openRouterModelSupportsAudioInput ? .green : .secondary)
+                    Text(appState.openRouterCapabilityStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             } else if appState.dictationMode == .localGenerative {
                 VStack(alignment: .leading, spacing: 8) {
-                    Label("Local Qwen3-ASR-1.7B", systemImage: "cpu")
-                        .font(.subheadline.weight(.semibold))
-                    Text("This mode runs a local generative speech model on-device through `speech-swift`.")
+                    Picker("Local model", selection: $appState.localSpeechBackend) {
+                        ForEach(LocalSpeechBackend.allCases) { backend in
+                            Text(backend.title).tag(backend)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Text(appState.localSpeechBackend.summary)
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -1105,7 +903,7 @@ private struct IntelligenceProviderCard: View {
                         }
                     } label: {
                         Label(
-                            appState.localQwenModelCached ? "Redownload Model" : "Download Model",
+                            appState.localQwenModelCached ? "Redownload \(appState.localSpeechBackend.title)" : "Download \(appState.localSpeechBackend.title)",
                             systemImage: appState.localQwenDownloadInProgress ? "arrow.down.circle.fill" : "square.and.arrow.down"
                         )
                     }
@@ -1123,7 +921,7 @@ private struct IntelligenceProviderCard: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
-                        Text(appState.localQwenModelCached ? "Model cached locally and ready to use." : "Model is not downloaded yet.")
+                        Text(appState.localQwenModelCached ? "\(appState.localSpeechBackend.title) cached locally and ready to use." : "\(appState.localSpeechBackend.title) is not downloaded yet.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -1135,21 +933,17 @@ private struct IntelligenceProviderCard: View {
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Local Qwen Instructions")
+                        Text("Local Speech Instructions")
                             .font(.subheadline.weight(.semibold))
 
                         TextEditor(text: $appState.intelligencePrompt)
                             .frame(height: 110)
                             .font(.body)
                             .border(Color.secondary.opacity(0.3))
-
-                        Text("These instructions are sent to the on-device Qwen transcriber. Example: \"Fix grammar but keep my wording\", \"Keep product names exactly as spoken\", or \"Format as a concise sentence\"")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
                     }
                 }
             } else {
-                Text("Local native mode keeps transcription on-device through Apple Speech Recognition and does not require an API key, model selection, or network connectivity.")
+                Text("Apple native speech. No setup required.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1228,20 +1022,13 @@ private struct IntelligenceContextCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Context")
-                .font(.headline)
-
             Toggle("Use Cursor Location Awareness", isOn: $appState.cursorAwarenessEnabled)
                 .disabled(!appState.canUseSelectedIntelligenceModel)
 
             if !appState.canUseSelectedIntelligenceModel {
-                Text("Cursor awareness is available when the selected intelligence model is ready.")
+                Text("Available when the selected intelligence model is ready.")
                     .font(.caption)
                     .foregroundStyle(.orange)
-            } else {
-                Text("When enabled, FriSpeak sends nearby text around the caret to the model so it can better understand context and tone.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .padding(16)
@@ -1990,12 +1777,12 @@ private struct PermissionsCard: View {
             PermissionRow(
                 title: "Microphone",
                 granted: appState.permissionStatus.microphone,
-                action: appState.openMicrophonePreferences
+                action: appState.requestMicrophoneThenOpenPreferences
             )
             PermissionRow(
                 title: "Speech Recognition",
                 granted: appState.permissionStatus.speechRecognition,
-                action: appState.openSpeechPreferences
+                action: appState.requestSpeechThenOpenPreferences
             )
             PermissionRow(
                 title: "Accessibility",
@@ -2147,7 +1934,7 @@ private struct ReadyCard: View {
             case .localNative:
                 return "Apple Speech is ready."
             case .localGenerative:
-                return "Download the local Qwen model or wait for the current download to finish."
+                return "Download the selected local speech model or wait for the current download to finish."
             case .remote:
                 return "Configure OpenRouter to use remote speech."
             }

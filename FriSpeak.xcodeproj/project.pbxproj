@@ -9,7 +9,8 @@
 /* Begin PBXBuildFile section */
 		E17A90012041250000000001 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = E17A90032041250000000003 /* MLXLLM */; };
 		E17A90022041250000000002 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = E17A90042041250000000004 /* MLXLMCommon */; };
-		E1F10001203A250000000001 /* Qwen3ASR in Frameworks */ = {isa = PBXBuildFile; productRef = E1F10003203A250000000003 /* Qwen3ASR */; };
+		E1F10001203A250000000001 /* OmnilingualASR in Frameworks */ = {isa = PBXBuildFile; productRef = E1F10003203A250000000003 /* OmnilingualASR */; };
+		E1F10004203A250000000004 /* ParakeetASR in Frameworks */ = {isa = PBXBuildFile; productRef = E1F10005203A250000000005 /* ParakeetASR */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,7 +48,8 @@
 			files = (
 				E17A90012041250000000001 /* MLXLLM in Frameworks */,
 				E17A90022041250000000002 /* MLXLMCommon in Frameworks */,
-				E1F10001203A250000000001 /* Qwen3ASR in Frameworks */,
+				E1F10001203A250000000001 /* OmnilingualASR in Frameworks */,
+				E1F10004203A250000000004 /* ParakeetASR in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -101,7 +103,8 @@
 			packageProductDependencies = (
 				E17A90032041250000000003 /* MLXLLM */,
 				E17A90042041250000000004 /* MLXLMCommon */,
-				E1F10003203A250000000003 /* Qwen3ASR */,
+				E1F10003203A250000000003 /* OmnilingualASR */,
+				E1F10005203A250000000005 /* ParakeetASR */,
 			);
 			productName = FriSpeak;
 			productReference = E1DDE6C82F72296200ECFEB0 /* FriSpeak.app */;
@@ -510,7 +513,7 @@
 			repositoryURL = "https://github.com/soniqo/speech-swift";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.0.7;
+				minimumVersion = 0.0.21;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -526,10 +529,15 @@
 			package = E17A90052041250000000005 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLMCommon;
 		};
-		E1F10003203A250000000003 /* Qwen3ASR */ = {
+		E1F10003203A250000000003 /* OmnilingualASR */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E1F10002203A250000000002 /* XCRemoteSwiftPackageReference "speech-swift" */;
-			productName = Qwen3ASR;
+			productName = OmnilingualASR;
+		};
+		E1F10005203A250000000005 /* ParakeetASR */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1F10002203A250000000002 /* XCRemoteSwiftPackageReference "speech-swift" */;
+			productName = ParakeetASR;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

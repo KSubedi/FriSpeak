@@ -4,7 +4,7 @@ FriSpeak is a macOS push-to-talk dictation app for writing into any focused text
 
 It supports:
 - local native transcription with Apple Speech
-- local generative transcription with Qwen3-ASR-1.7B
+- local generative transcription with Omnilingual ASR 300M Core ML, Omnilingual ASR 1B MLX 4-bit, or Parakeet TDT Core ML
 - remote transcription and text processing through OpenRouter
 - optional text intelligence with Apple Intelligence, OpenRouter, or a local MLX model
 
@@ -35,7 +35,7 @@ This repository currently vendors a Prism MLX fork under `Vendor/mlx-swift` so t
 - Dictation into arbitrary macOS apps through Accessibility APIs
 - Three speech pipelines:
   - `Apple Native`
-  - `Local Generative` using Qwen3-ASR-1.7B
+  - `Local Generative` using Omnilingual ASR 300M Core ML or Parakeet TDT Core ML on the Neural Engine, or Omnilingual ASR 1B MLX 4-bit on the Metal GPU
   - `Remote` using OpenRouter
 - Three intelligence backends:
   - `Apple Intelligence`
@@ -119,7 +119,7 @@ Remote speech is automatically enabled when the selected model supports audio in
 
 ## Known Constraints
 
-- The local Qwen and local MLX paths are much heavier than Apple native dictation.
+- The local speech model paths are heavier than Apple native dictation. The 300M Core ML and Parakeet TDT Core ML options target the Neural Engine; the 1B MLX 4-bit option targets the Metal GPU and uses more unified memory.
 - The vendored Prism MLX fork is intentional and currently required for `prism-ml/Bonsai-8B-mlx-1bit`.
 - Apple Intelligence prompt-following is useful but still less reliable than deterministic formatting for some caret-boundary cases, so FriSpeak includes local post-processing guards.
 

@@ -4,29 +4,48 @@
 //
 
 @preconcurrency import AVFoundation
+import Darwin
 import Foundation
-import Qwen3ASR
+import OmnilingualASR
+import ParakeetASR
 
 actor LocalQwenTranscriber {
-    static let modelID = "aufklarer/Qwen3-ASR-1.7B-MLX-8bit"
     private static let targetSampleRate = 16_000
 
-    private var model: Qwen3ASRModel?
-    private var loadTask: Task<Qwen3ASRModel, Error>?
+    private var coreMLModel: OmnilingualASRModel?
+    private var coreMLLoadTask: Task<OmnilingualASRModel, Error>?
+    private var mlxModel: OmnilingualASRMLXModel?
+    private var mlxLoadTask: Task<OmnilingualASRMLXModel, Error>?
+    private var parakeetModel: ParakeetASRModel?
+    private var parakeetLoadTask: Task<ParakeetASRModel, Error>?
 
-    func transcribeFile(at url: URL, prompt: String = "") async throws -> String {
+    func transcribeFile(
+        at url: URL,
+        backend: LocalSpeechBackend,
+        prompt: String = ""
+    ) async throws -> String {
         let audio = try await Self.loadAudioSamples(from: url)
-        let model = try await loadModel()
-        let promptContext = Self.normalizedPromptContext(from: prompt)
-        let transcript = await Task.detached(priority: .userInitiated) {
-            model.transcribe(
-                audio: audio,
-                sampleRate: 16_000,
-                language: nil,
-                context: promptContext
-            )
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-        }.value
+        let transcript: String
+        switch backend {
+        case .coreML300M:
+            let model = try await loadCoreMLModel()
+            transcript = await Task.detached(priority: .userInitiated) {
+                model.transcribe(audio: audio, sampleRate: 16_000, language: nil)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }.value
+        case .mlx1B4bit:
+            let model = try await loadMLXModel()
+            transcript = try await Task.detached(priority: .userInitiated) {
+                try model.transcribeAudio(audio, sampleRate: 16_000, language: nil)
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }.value
+        case .parakeetTDT:
+            let model = try await loadParakeetModel()
+            transcript = try await Task.detached(priority: .userInitiated) {
+                try model.transcribeAudio(audio, sampleRate: 16_000, language: "en")
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+            }.value
+        }
 
         guard !transcript.isEmpty else {
             throw TranscriptionError.noResult
@@ -35,85 +54,141 @@ actor LocalQwenTranscriber {
         return transcript
     }
 
-    func prepareModel(progressHandler: ((Double, String) -> Void)? = nil) async throws {
-        _ = try await loadModel(progressHandler: progressHandler)
+    func prepareModel(
+        backend: LocalSpeechBackend,
+        progressHandler: ((Double, String) -> Void)? = nil
+    ) async throws {
+        switch backend {
+        case .coreML300M:
+            _ = try await loadCoreMLModel(progressHandler: progressHandler)
+        case .mlx1B4bit:
+            _ = try await loadMLXModel(progressHandler: progressHandler)
+        case .parakeetTDT:
+            _ = try await loadParakeetModel(progressHandler: progressHandler)
+        }
     }
 
-    func preloadCachedModel() async throws -> Bool {
-        guard Self.isModelCached() else {
+    func preloadCachedModel(backend: LocalSpeechBackend) async throws -> Bool {
+        guard Self.isModelCached(backend: backend) else {
             return false
         }
 
-        _ = try await loadModel()
+        try await prepareModel(backend: backend)
         return true
     }
 
-    private func loadModel(progressHandler: ((Double, String) -> Void)? = nil) async throws -> Qwen3ASRModel {
-        if let model {
+    private func loadCoreMLModel(progressHandler: ((Double, String) -> Void)? = nil) async throws -> OmnilingualASRModel {
+        if let coreMLModel {
             progressHandler?(1.0, "Ready")
-            return model
+            return coreMLModel
         }
 
-        if let loadTask {
-            return try await loadTask.value
+        if let coreMLLoadTask {
+            return try await coreMLLoadTask.value
         }
 
-        let task = Task<Qwen3ASRModel, Error> {
-            try await Qwen3ASRModel.fromPretrained(
-                modelId: Self.modelID,
+        let task = Task<OmnilingualASRModel, Error> {
+            setenv("SPEECH_COREML_COMPUTE_UNITS", "ane", 1)
+            return try await OmnilingualASRModel.fromPretrained(
+                modelId: LocalSpeechBackend.coreML300M.modelID,
                 progressHandler: progressHandler
             )
         }
-        loadTask = task
+        coreMLLoadTask = task
 
         do {
             let loadedModel = try await task.value
-            model = loadedModel
-            loadTask = nil
+            coreMLModel = loadedModel
+            coreMLLoadTask = nil
             return loadedModel
         } catch {
-            loadTask = nil
+            coreMLLoadTask = nil
             throw error
         }
     }
 
-    nonisolated static func isModelCached() -> Bool {
+    private func loadMLXModel(progressHandler: ((Double, String) -> Void)? = nil) async throws -> OmnilingualASRMLXModel {
+        if let mlxModel {
+            progressHandler?(1.0, "Ready")
+            return mlxModel
+        }
+
+        if let mlxLoadTask {
+            return try await mlxLoadTask.value
+        }
+
+        let task = Task<OmnilingualASRMLXModel, Error> {
+            try await OmnilingualASRMLXModel.fromPretrained(
+                variant: .b1,
+                bits: 4,
+                modelId: LocalSpeechBackend.mlx1B4bit.modelID,
+                progressHandler: progressHandler
+            )
+        }
+        mlxLoadTask = task
+
+        do {
+            let loadedModel = try await task.value
+            mlxModel = loadedModel
+            mlxLoadTask = nil
+            return loadedModel
+        } catch {
+            mlxLoadTask = nil
+            throw error
+        }
+    }
+
+    private func loadParakeetModel(progressHandler: ((Double, String) -> Void)? = nil) async throws -> ParakeetASRModel {
+        if let parakeetModel {
+            progressHandler?(1.0, "Ready")
+            return parakeetModel
+        }
+
+        if let parakeetLoadTask {
+            return try await parakeetLoadTask.value
+        }
+
+        let task = Task<ParakeetASRModel, Error> {
+            setenv("SPEECH_COREML_COMPUTE_UNITS", "ane", 1)
+            return try await ParakeetASRModel.fromPretrained(
+                modelId: LocalSpeechBackend.parakeetTDT.modelID,
+                progressHandler: progressHandler
+            )
+        }
+        parakeetLoadTask = task
+
+        do {
+            let loadedModel = try await task.value
+            parakeetModel = loadedModel
+            parakeetLoadTask = nil
+            return loadedModel
+        } catch {
+            parakeetLoadTask = nil
+            throw error
+        }
+    }
+
+    nonisolated static func isModelCached(backend: LocalSpeechBackend = .coreML300M) -> Bool {
         let fileManager = FileManager.default
         let cacheRoot = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Caches", isDirectory: true)
 
         let legacyDirectory = cacheRoot
             .appendingPathComponent("qwen3-speech", isDirectory: true)
-            .appendingPathComponent("aufklarer_Qwen3-ASR-1.7B-MLX-8bit", isDirectory: true)
+            .appendingPathComponent("aufklarer_\(backend.cacheRepositoryName)", isDirectory: true)
         let hubDirectory = cacheRoot
             .appendingPathComponent("qwen3-speech", isDirectory: true)
             .appendingPathComponent("models", isDirectory: true)
             .appendingPathComponent("aufklarer", isDirectory: true)
-            .appendingPathComponent("Qwen3-ASR-1.7B-MLX-8bit", isDirectory: true)
+            .appendingPathComponent(backend.cacheRepositoryName, isDirectory: true)
 
-        return containsModelArtifacts(in: legacyDirectory) || containsModelArtifacts(in: hubDirectory)
+        return containsModelArtifacts(in: legacyDirectory, requiredFiles: backend.requiredCacheFiles)
+            || containsModelArtifacts(in: hubDirectory, requiredFiles: backend.requiredCacheFiles)
     }
 
-    nonisolated private static func containsModelArtifacts(in directory: URL) -> Bool {
+    nonisolated private static func containsModelArtifacts(in directory: URL, requiredFiles: [String]) -> Bool {
         let fileManager = FileManager.default
-        let requiredFiles = ["vocab.json", "tokenizer_config.json"]
         return requiredFiles.allSatisfy { fileManager.fileExists(atPath: directory.appendingPathComponent($0).path) }
-    }
-
-    nonisolated private static func normalizedPromptContext(from prompt: String) -> String? {
-        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return nil
-        }
-
-        return """
-        You are transcribing dictated speech into clean text.
-
-        Follow these extra instructions while transcribing:
-        \(trimmed)
-
-        Return only the transcription.
-        """
     }
 
     nonisolated private static func loadAudioSamples(from url: URL) async throws -> [Float] {
@@ -316,9 +391,9 @@ enum LocalQwenTranscriberError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .audioConversionFailed:
-            return "Failed to prepare audio for the local Qwen model."
+            return "Failed to prepare audio for the local speech model."
         case .audioDecodingFailed:
-            return "Failed to decode the recorded audio for the local Qwen model."
+            return "Failed to decode the recorded audio for the local speech model."
         }
     }
 }

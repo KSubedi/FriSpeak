@@ -51,7 +51,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ml-explore/mlx-swift",
       "state" : {
-        "revision" : "30cadbd65ddd27940710b46a2c518e47443522a4",
+        "revision" : "151184940bdf97c9117ec851b50d404b33d9474f",
         "version" : "0.31.3"
       }
     },
@@ -69,8 +69,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/soniqo/speech-swift",
       "state" : {
-        "revision" : "433b9106b49083fdf4adacf2314dcdeebd767b8b",
-        "version" : "0.0.7"
+        "revision" : "7609977be837a6529bd04300c6b963e735300070",
+        "version" : "0.0.21"
       }
     },
     {
@@ -314,6 +314,15 @@
       "state" : {
         "revision" : "ca48d46c25f8fa948d37eaa480c73172182cf90f",
         "version" : "1.5.0"
+      }
+    },
+    {
+      "identity" : "whisperkit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/argmaxinc/WhisperKit",
+      "state" : {
+        "revision" : "25c62997041c134b03ca82731ce2f6fd2cae1eb9",
+        "version" : "1.0.0"
       }
     },
     {

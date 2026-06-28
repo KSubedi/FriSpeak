@@ -33,7 +33,7 @@ enum DictationMode: String, CaseIterable, Identifiable {
         case .localNative:
             return "Apple Speech Recognition"
         case .localGenerative:
-            return "Qwen3-ASR-1.7B local model"
+            return "Local on-device speech model"
         case .remote:
             return "OpenRouter cleanup and insertion assistance"
         }
@@ -47,6 +47,102 @@ enum DictationMode: String, CaseIterable, Identifiable {
             return "cpu"
         case .remote:
             return "network"
+        }
+    }
+}
+
+enum LocalSpeechBackend: String, CaseIterable, Identifiable {
+    case coreML300M
+    case mlx1B4bit
+    case parakeetTDT
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .coreML300M:
+            return "300M Core ML"
+        case .mlx1B4bit:
+            return "1B MLX 4-bit"
+        case .parakeetTDT:
+            return "Parakeet TDT"
+        }
+    }
+
+    var detailTitle: String {
+        switch self {
+        case .coreML300M:
+            return "Omnilingual ASR 300M Core ML"
+        case .mlx1B4bit:
+            return "Omnilingual ASR 1B MLX 4-bit"
+        case .parakeetTDT:
+            return "Parakeet TDT 0.6B Core ML"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .coreML300M:
+            return "Runs with Core ML on the Neural Engine. Smallest memory footprint."
+        case .mlx1B4bit:
+            return "Runs with MLX on the Metal GPU. Larger model, more unified memory."
+        case .parakeetTDT:
+            return "Runs with Core ML on the Neural Engine. 25 European languages, less multilingual drift."
+        }
+    }
+
+    var acceleratorLabel: String {
+        switch self {
+        case .coreML300M:
+            return "NPU / Neural Engine"
+        case .mlx1B4bit:
+            return "GPU / Metal"
+        case .parakeetTDT:
+            return "NPU / Neural Engine"
+        }
+    }
+
+    var expectedMemoryLabel: String {
+        switch self {
+        case .coreML300M:
+            return "~312 MB model; expect ~0.5-0.8 GB runtime memory"
+        case .mlx1B4bit:
+            return "~576 MB model; expect ~1.0-1.5 GB unified memory"
+        case .parakeetTDT:
+            return "~500 MB model; expect ~0.7-1.0 GB runtime memory"
+        }
+    }
+
+    var modelID: String {
+        switch self {
+        case .coreML300M:
+            return "aufklarer/Omnilingual-ASR-CTC-300M-CoreML-INT8-10s"
+        case .mlx1B4bit:
+            return "aufklarer/Omnilingual-ASR-CTC-1B-MLX-4bit"
+        case .parakeetTDT:
+            return "aufklarer/Parakeet-TDT-v3-CoreML-INT8-30s"
+        }
+    }
+
+    var cacheRepositoryName: String {
+        switch self {
+        case .coreML300M:
+            return "Omnilingual-ASR-CTC-300M-CoreML-INT8-10s"
+        case .mlx1B4bit:
+            return "Omnilingual-ASR-CTC-1B-MLX-4bit"
+        case .parakeetTDT:
+            return "Parakeet-TDT-v3-CoreML-INT8-30s"
+        }
+    }
+
+    var requiredCacheFiles: [String] {
+        switch self {
+        case .coreML300M:
+            return ["config.json", "tokenizer.model", "omnilingual-ctc-300m-int8.mlmodelc"]
+        case .mlx1B4bit:
+            return ["config.json", "tokenizer.model", "model.safetensors"]
+        case .parakeetTDT:
+            return ["config.json", "vocab.json", "encoder.mlmodelc", "decoder.mlmodelc", "joint.mlmodelc"]
         }
     }
 }
@@ -98,6 +194,7 @@ final class AppState: ObservableObject {
 
     @Published var hotkey: PushToTalkHotkey
     @Published var dictationMode: DictationMode
+    @Published var localSpeechBackend: LocalSpeechBackend
     @Published var intelligenceFeaturesEnabled: Bool
     @Published var intelligenceModel: IntelligenceModel
     @Published var builtInIntelligencePromptingEnabled: Bool
@@ -113,7 +210,7 @@ final class AppState: ObservableObject {
     @Published private(set) var openRouterModelSupportsAudioInput = false
     @Published private(set) var openRouterCapabilityStatus = "Model capabilities unavailable"
     @Published private(set) var appleIntelligenceStatus = IntelligenceService.appleIntelligenceAvailabilityDescription()
-    @Published private(set) var localQwenModelCached = LocalQwenTranscriber.isModelCached()
+    @Published private(set) var localQwenModelCached = false
     @Published private(set) var localQwenPreloadInProgress = false
     @Published private(set) var localQwenDownloadInProgress = false
     @Published private(set) var localQwenDownloadProgress: Double = 0
@@ -165,6 +262,7 @@ final class AppState: ObservableObject {
         self.hasCompletedOnboarding = resolvedPreferences.loadOnboardingCompleted()
         
         self.dictationMode = resolvedPreferences.loadDictationMode()
+        self.localSpeechBackend = resolvedPreferences.loadLocalSpeechBackend()
         self.intelligenceFeaturesEnabled = resolvedPreferences.loadIntelligenceFeaturesEnabled()
         self.intelligenceModel = resolvedPreferences.loadIntelligenceModel()
         self.builtInIntelligencePromptingEnabled = resolvedPreferences.loadBuiltInIntelligencePromptingEnabled()
@@ -202,6 +300,20 @@ final class AppState: ObservableObject {
             .dropFirst()
             .sink { [weak self] newValue in
                 self?.preferences.save(dictationMode: newValue)
+            }
+            .store(in: &cancellables)
+
+        $localSpeechBackend
+            .dropFirst()
+            .sink { [weak self] newValue in
+                guard let self else { return }
+                self.preferences.save(localSpeechBackend: newValue)
+                self.refreshLocalQwenModelState()
+                if self.dictationMode == .localGenerative {
+                    Task { @MainActor in
+                        await self.preloadLocalQwenModelIfAvailable()
+                    }
+                }
             }
             .store(in: &cancellables)
 
@@ -368,8 +480,7 @@ final class AppState: ObservableObject {
             .store(in: &cancellables)
 
         Task {
-            localQwenModelCached = LocalQwenTranscriber.isModelCached()
-            localQwenDownloadStatus = localQwenModelCached ? "Ready" : "Model not downloaded"
+            refreshLocalQwenModelState()
             localBonsaiModelCached = LocalBonsaiIntelligenceService.isModelCached()
             localBonsaiCompatibilityIssue = LocalBonsaiIntelligenceService.compatibilityIssue()
             localBonsaiDownloadStatus = localBonsaiCompatibilityIssue ?? (localBonsaiModelCached ? "Ready" : "Model not downloaded")
@@ -559,15 +670,15 @@ final class AppState: ObservableObject {
                 return "Speech: \(Int((localQwenDownloadProgress * 100).rounded()))% — \(localQwenDownloadStatus)"
             }
             if localQwenPreloadInProgress {
-                return "Speech: Loading local Qwen3-ASR into memory"
+                return "Speech: Loading \(localSpeechBackend.title) into memory"
             }
             if localQwenModelCached {
-                return "Speech: Local Qwen3-ASR mode is ready"
+                return "Speech: \(localSpeechBackend.title) is ready"
             }
             if let localQwenLastError, !localQwenLastError.isEmpty {
-                return "Speech: Local Qwen model needs download: \(localQwenLastError)"
+                return "Speech: \(localSpeechBackend.title) needs download: \(localQwenLastError)"
             }
-            return "Speech: Local Qwen3-ASR mode requires a model download"
+            return "Speech: \(localSpeechBackend.title) requires a model download"
         case .remote:
             if !isDeviceOnline {
                 return "Speech: Remote mode selected, but this Mac is offline"
@@ -613,18 +724,26 @@ final class AppState: ObservableObject {
         openAccessibilityPreferences()
     }
 
-    func openMicrophonePreferences() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") else {
-            return
+    func requestMicrophoneThenOpenPreferences() {
+        Task {
+            _ = await permissionsManager.requestMissingPermissions(promptForAccessibility: false)
+            await refreshPermissions()
+            guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") else {
+                return
+            }
+            NSWorkspace.shared.open(url)
         }
-        NSWorkspace.shared.open(url)
     }
 
-    func openSpeechPreferences() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") else {
-            return
+    func requestSpeechThenOpenPreferences() {
+        Task {
+            _ = await permissionsManager.requestMissingPermissions(promptForAccessibility: false)
+            await refreshPermissions()
+            guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") else {
+                return
+            }
+            NSWorkspace.shared.open(url)
         }
-        NSWorkspace.shared.open(url)
     }
 
     func clearError() {
@@ -668,25 +787,28 @@ final class AppState: ObservableObject {
 
     func downloadLocalQwenModel() async {
         guard !localQwenDownloadInProgress else { return }
+        let backend = localSpeechBackend
 
         localQwenDownloadInProgress = true
         localQwenDownloadProgress = 0
-        localQwenDownloadStatus = "Preparing download..."
+        localQwenDownloadStatus = "Preparing \(backend.title) download..."
         localQwenLastError = nil
 
         do {
-            try await localQwenTranscriber.prepareModel { [weak self] progress, status in
+            try await localQwenTranscriber.prepareModel(backend: backend) { [weak self] progress, status in
                 Task { @MainActor in
                     guard let self else { return }
                     self.localQwenDownloadProgress = progress
                     self.localQwenDownloadStatus = status.isEmpty ? "Downloading model..." : status
                 }
             }
-            localQwenModelCached = true
+            if localSpeechBackend == backend {
+                localQwenModelCached = true
+            }
             localQwenDownloadProgress = 1
             localQwenDownloadStatus = "Ready"
         } catch {
-            localQwenModelCached = LocalQwenTranscriber.isModelCached()
+            localQwenModelCached = LocalQwenTranscriber.isModelCached(backend: localSpeechBackend)
             localQwenLastError = error.localizedDescription
             localQwenDownloadStatus = "Download failed"
         }
@@ -732,11 +854,12 @@ final class AppState: ObservableObject {
     }
 
     private func preloadLocalQwenModelIfAvailable() async {
+        let backend = localSpeechBackend
         guard localQwenModelCached else { return }
         guard !localQwenDownloadInProgress, !localQwenPreloadInProgress else { return }
 
         localQwenPreloadInProgress = true
-        localQwenDownloadStatus = "Loading model into memory..."
+        localQwenDownloadStatus = "Loading \(backend.title) into memory..."
         localQwenLastError = nil
 
         defer {
@@ -744,15 +867,27 @@ final class AppState: ObservableObject {
         }
 
         do {
-            let loaded = try await localQwenTranscriber.preloadCachedModel()
+            let loaded = try await localQwenTranscriber.preloadCachedModel(backend: backend)
             if loaded {
-                localQwenModelCached = true
+                if localSpeechBackend == backend {
+                    localQwenModelCached = true
+                }
                 localQwenDownloadStatus = "Ready"
             }
         } catch {
             localQwenLastError = error.localizedDescription
             localQwenDownloadStatus = "Model cached, but failed to load"
         }
+    }
+
+    private func refreshLocalQwenModelState() {
+        localQwenModelCached = LocalQwenTranscriber.isModelCached(backend: localSpeechBackend)
+        if localQwenDownloadInProgress || localQwenPreloadInProgress {
+            return
+        }
+        localQwenDownloadProgress = localQwenModelCached ? 1 : 0
+        localQwenDownloadStatus = localQwenModelCached ? "Ready" : "Model not downloaded"
+        localQwenLastError = nil
     }
 
     private func preloadLocalBonsaiModelIfAvailable() async {
@@ -856,9 +991,9 @@ final class AppState: ObservableObject {
             var aiErrorMessage: String?
 
             if dictationMode == .localGenerative {
-                hudController.show(text: "Transcribing with local Qwen", state: .transcribing)
+                hudController.show(text: "Transcribing with \(localSpeechBackend.title)", state: .transcribing)
                 do {
-                    let qwenTranscript = try await processLocalGenerativeTranscriptionWithTimeout(
+                    let localTranscript = try await processLocalGenerativeTranscriptionWithTimeout(
                         audioURL: recordingURL,
                         prompt: localGenerativeTranscriptionPrompt()
                     )
@@ -866,16 +1001,16 @@ final class AppState: ObservableObject {
                         return
                     }
 
-                    rawTranscript = qwenTranscript
-                    transcript = qwenTranscript
+                    rawTranscript = localTranscript
+                    transcript = localTranscript
                     modelPrompt = localQwenPromptSummary()
                     localQwenModelCached = true
                     localQwenLastError = nil
                     localQwenDownloadStatus = "Ready"
                     historyAudioFilename = persistHistoryAudioIfNeeded(from: recordingURL)
                 } catch {
-                    print("Local Qwen transcription failed: \(error.frispeakReadableMessage)")
-                    localQwenModelCached = LocalQwenTranscriber.isModelCached()
+                    print("Local speech transcription failed: \(error.frispeakReadableMessage)")
+                    localQwenModelCached = LocalQwenTranscriber.isModelCached(backend: localSpeechBackend)
                     localQwenLastError = error.frispeakReadableMessage
                     if !localQwenDownloadInProgress {
                         localQwenDownloadStatus = "Model needs attention"
@@ -1301,11 +1436,15 @@ final class AppState: ObservableObject {
         let warningTask = Task { @MainActor [hudController] in
             try? await Task.sleep(nanoseconds: 10 * 1_000_000_000)
             guard !Task.isCancelled else { return }
-            hudController.show(text: "Loading or running local Qwen model", state: .transcribing)
+            hudController.show(text: "Loading or running local speech model", state: .transcribing)
         }
 
         let workTask = Task<String, Error> {
-            try await localQwenTranscriber.transcribeFile(at: audioURL, prompt: prompt)
+            try await localQwenTranscriber.transcribeFile(
+                at: audioURL,
+                backend: localSpeechBackend,
+                prompt: prompt
+            )
         }
 
         defer {
@@ -1339,7 +1478,7 @@ final class AppState: ObservableObject {
                 try? await Task.sleep(nanoseconds: timeoutNanoseconds)
                 workTask.cancel()
                 resume(with: .failure(
-                    IntelligenceError.remoteError("Local Qwen transcription timed out after 300 seconds.")
+                    IntelligenceError.remoteError("Local speech transcription timed out after 300 seconds.")
                 ))
             }
         }
@@ -1623,10 +1762,10 @@ final class AppState: ObservableObject {
     private func localQwenPromptSummary() -> String {
         let normalized = normalizedInstructions(from: localGenerativeTranscriptionPrompt())
         if normalized == "No additional instructions." {
-            return "Local Qwen3-ASR-1.7B transcription with no additional instructions."
+            return "\(localSpeechBackend.detailTitle) transcription."
         }
 
-        return "Local Qwen3-ASR-1.7B instructions: \(normalized)"
+        return "\(localSpeechBackend.detailTitle) transcription. Prompt instructions require the text intelligence step: \(normalized)"
     }
 
     private var textIntelligenceHUDTitle: String {

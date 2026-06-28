@@ -12,6 +12,7 @@ final class PreferencesStore {
     private let hotkeyKey = "push_to_talk_hotkey"
     private let onboardingCompletedKey = "onboarding_completed"
     private let dictationModeKey = "dictation_mode"
+    private let localSpeechBackendKey = "local_speech_backend"
     private let intelligencePromptKey = "intelligence_prompt"
     private let intelligenceFeaturesEnabledKey = "intelligence_features_enabled"
     private let intelligenceModelKey = "intelligence_model"
@@ -82,6 +83,21 @@ final class PreferencesStore {
 
     func save(dictationMode: DictationMode) {
         defaults.set(dictationMode.rawValue, forKey: dictationModeKey)
+    }
+
+    func loadLocalSpeechBackend() -> LocalSpeechBackend {
+        guard
+            let rawValue = defaults.string(forKey: localSpeechBackendKey),
+            let backend = LocalSpeechBackend(rawValue: rawValue)
+        else {
+            return .coreML300M
+        }
+
+        return backend
+    }
+
+    func save(localSpeechBackend: LocalSpeechBackend) {
+        defaults.set(localSpeechBackend.rawValue, forKey: localSpeechBackendKey)
     }
     
     func loadIntelligencePrompt() -> String {
