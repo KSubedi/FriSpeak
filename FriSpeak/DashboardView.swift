@@ -2011,39 +2011,17 @@ private struct HotkeyCard: View {
 
 private struct IntelligenceCard: View {
     @EnvironmentObject private var appState: AppState
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 12) {
-                Image(systemName: "switch.2")
-                    .font(.largeTitle)
-                    .foregroundStyle(Color.accentColor)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Configuration")
-                        .font(.title2.weight(.bold))
-                    Text(appState.intelligenceAvailabilityStatus)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            
-            Text("Choose a speech model first, then optionally add intelligence features for cleanup, prompting, and remote context fitting.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-
-            HStack(alignment: .top, spacing: 20) {
-                VStack(alignment: .leading, spacing: 20) {
-                    SpeechConfigurationCard()
-                    IntelligenceFeaturesConfigurationCard()
-                }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-
-                OpenRouterConfigurationCard()
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
+        VStack(spacing: 18) {
+            SpeechConfigurationCard()
+            IntelligenceFeaturesConfigurationCard()
+            OpenRouterConfigurationCard()
         }
+        .frame(maxWidth: 640)
+        .frame(maxWidth: .infinity, alignment: .top)
         .animation(.default, value: appState.dictationMode)
+        .animation(.default, value: appState.intelligenceFeaturesEnabled)
     }
 }
 
