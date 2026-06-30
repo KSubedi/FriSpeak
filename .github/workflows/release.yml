@@ -21,6 +21,11 @@ jobs:
       - name: Install create-dmg
         run: brew install create-dmg
 
+      - name: Prepare vendored SPM dependencies
+        run: |
+          chmod +x scripts/ci-prepare-vendor.sh
+          scripts/ci-prepare-vendor.sh
+
       - name: Calculate and set version
         id: version
         run: |
