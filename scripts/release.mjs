@@ -124,6 +124,9 @@ function ask(promptText) {
 }
 
 // Prompt with terminal echo disabled (best-effort; falls back to visible input).
+// Handles multi-character chunks: stdin 'data' events deliver the whole typed
+// line (e.g. "secret\n"), not one character at a time, so we must strip CR/LF
+// from the chunk rather than compare the chunk against "\n".
 function askHidden(promptText) {
   return new Promise((resolve) => {
     process.stdout.write(promptText);
@@ -132,18 +135,19 @@ function askHidden(promptText) {
     let data = '';
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
-    const onData = (c) => {
-      if (c === '\n' || c === '\r') {
+    const onData = (chunk) => {
+      if (chunk.includes('\u0003')) {
+        if (muted) { try { execSync('stty echo', { stdio: 'inherit' }); } catch {} }
+        process.exit(1);
+      }
+      const ended = /[\r\n]/.test(chunk);
+      data += chunk.replace(/[\r\n]/g, '');
+      if (ended) {
         process.stdin.removeListener('data', onData);
         process.stdin.pause();
         if (muted) { try { execSync('stty echo', { stdio: 'inherit' }); } catch {} }
         process.stdout.write('\n');
         resolve(data);
-      } else if (c === '\u0003') {
-        if (muted) { try { execSync('stty echo', { stdio: 'inherit' }); } catch {} }
-        process.exit(1);
-      } else {
-        data += c;
       }
     };
     process.stdin.on('data', onData);
@@ -180,7 +184,14 @@ async function ensureNotaryProfile(teamId) {
   const password = await askHidden('  App-specific password: ');
   if (!password) die('App-specific password is required to set up notarization.');
 
-  run(`xcrun notarytool store-credentials "${NOTARY_PROFILE}" --apple-id "${appleId}" --team-id "${teamId}" --password "${password}"`);
+  // Run with inherited stdio so the user sees "Validating your credentials..."
+  // live, but catch failures so Node doesn't print the full command (which would
+  // echo the password) via its "Command failed: ..." message.
+  try {
+    run(`xcrun notarytool store-credentials "${NOTARY_PROFILE}" --apple-id "${appleId}" --team-id "${teamId}" --password "${password}"`);
+  } catch {
+    die('Could not store notary credentials (see the Apple error above).\n  Verify the Apple ID and app-specific password are correct, and that team ID ' + teamId + ' matches your Apple Developer account.');
+  }
   log(`  ✓ Notary profile stored: ${NOTARY_PROFILE}`);
 }
 
