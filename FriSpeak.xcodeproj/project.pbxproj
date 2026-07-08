@@ -346,6 +346,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CODE_SIGN_ENTITLEMENTS = "FriSpeak/FriSpeak.entitlements";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ANNYWKNYW6;
 				ENABLE_APP_SANDBOX = NO;
@@ -383,6 +384,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CODE_SIGN_ENTITLEMENTS = "FriSpeak/FriSpeak.entitlements";
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = ANNYWKNYW6;
 				ENABLE_APP_SANDBOX = NO;
