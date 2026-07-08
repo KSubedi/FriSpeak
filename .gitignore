@@ -6,6 +6,9 @@ DerivedData/
 *.swp
 *.tmp
 
+# Xcode per-user scheme state (not shareable; should never be tracked)
+**/xcuserdata/
+
 FriSpeak/scripts/__pycache__/
 
 # Keep the active vendored MLX fork, ignore backup clones.
