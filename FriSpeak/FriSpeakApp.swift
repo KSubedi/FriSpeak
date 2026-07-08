@@ -23,7 +23,9 @@ struct FriSpeakApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified)
-        .windowResizability(.contentSize)
+        // Min size from content; allow free resize so the dashboard fills larger displays.
+        .windowResizability(.contentMinSize)
+        .defaultSize(width: 920, height: 640)
 
         MenuBarExtra("FriSpeak", systemImage: appState.statusItemSymbolName) {
             MenuBarContentView()

@@ -720,30 +720,61 @@ final class AppState: ObservableObject {
     }
 
     func promptForAccessibility() {
-        permissionStatus.accessibility = permissionsManager.requestAccessibilityIfNeeded(prompt: true)
-        openAccessibilityPreferences()
+        let trusted = permissionsManager.requestAccessibilityIfNeeded(prompt: true)
+        permissionStatus.accessibility = trusted
+        // Accessibility always needs a manual toggle in System Settings.
+        if !trusted {
+            openAccessibilityPreferences()
+        }
     }
 
     func requestMicrophoneThenOpenPreferences() {
         Task {
-            _ = await permissionsManager.requestMissingPermissions(promptForAccessibility: false)
+            // Only open System Settings when the dialog cannot be shown again (already denied).
+            // First-time grant uses the system dialog alone — opening Settings is redundant.
+            let outcome = await permissionsManager.requestMicrophoneIfNeeded()
             await refreshPermissions()
-            guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") else {
-                return
+            if outcome == .needsSystemSettings {
+                openPrivacyPreferences(pane: "Privacy_Microphone")
             }
-            NSWorkspace.shared.open(url)
         }
     }
 
     func requestSpeechThenOpenPreferences() {
         Task {
-            _ = await permissionsManager.requestMissingPermissions(promptForAccessibility: false)
+            // Only open System Settings when the dialog cannot be shown again (already denied).
+            let outcome = await permissionsManager.requestSpeechIfNeeded()
             await refreshPermissions()
-            guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_SpeechRecognition") else {
-                return
+            if outcome == .needsSystemSettings {
+                openPrivacyPreferences(pane: "Privacy_SpeechRecognition")
             }
-            NSWorkspace.shared.open(url)
         }
+    }
+
+    /// Onboarding helper: request each permission in order via system dialogs.
+    /// Opens System Settings only for permissions that are already denied (dialog unavailable).
+    func requestAllRequiredPermissions() {
+        Task {
+            let micOutcome = await permissionsManager.requestMicrophoneIfNeeded()
+            let speechOutcome = await permissionsManager.requestSpeechIfNeeded()
+            let accessibilityTrusted = permissionsManager.requestAccessibilityIfNeeded(prompt: true)
+            await refreshPermissions()
+
+            if micOutcome == .needsSystemSettings {
+                openPrivacyPreferences(pane: "Privacy_Microphone")
+            } else if speechOutcome == .needsSystemSettings {
+                openPrivacyPreferences(pane: "Privacy_SpeechRecognition")
+            } else if !accessibilityTrusted {
+                openAccessibilityPreferences()
+            }
+        }
+    }
+
+    private func openPrivacyPreferences(pane: String) {
+        guard let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)") else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     func clearError() {

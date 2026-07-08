@@ -47,7 +47,7 @@ struct DashboardView: View {
                 }
             }
         }
-        .frame(minWidth: 650, minHeight: 450)
+        .frame(minWidth: 720, minHeight: 520)
     }
 }
 
@@ -1771,78 +1771,33 @@ private final class HistoryAudioPlayer: NSObject, ObservableObject, AVAudioPlaye
     }
 }
 
-private struct PermissionRowForm: View {
-    let title: String
-    let description: String
-    let granted: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.title2)
-                .foregroundStyle(granted ? .green : .red)
-                .symbolEffect(.bounce, value: granted)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.body.weight(.medium))
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
-            
-            if !granted {
-                Button("Grant Access") {
-                    action()
-                }
-                .controlSize(.small)
-            }
-        }
-        .padding(.vertical, 6)
-    }
-}
-
 // MARK: - Onboarding Flow
 
 private struct OnboardingFlowView: View {
     @EnvironmentObject private var appState: AppState
     @State private var stepIndex = 0
-    
-    private var steps: [SetupStep] {
-        var allSteps: [SetupStep] = [.welcome, .permissions, .hotkey]
-        allSteps.append(.intelligence)
-        allSteps.append(.ready)
-        return allSteps
-    }
-    
+
+    private let steps = SetupStep.allCases
+
     private var currentStep: SetupStep {
-        guard steps.indices.contains(stepIndex) else { return steps.last ?? .ready }
-        return steps[stepIndex]
+        steps[min(max(stepIndex, 0), steps.count - 1)]
     }
 
-    private var canFinishSetup: Bool {
-        appState.permissionStatus.allRequiredGranted && onboardingModeIsReady
-    }
-
-    private var onboardingModeIsReady: Bool {
-        switch appState.dictationMode {
-        case .localNative:
+    private var canAdvance: Bool {
+        switch currentStep {
+        case .welcome:
             return true
-        case .localGenerative:
-            return appState.localQwenModelCached || appState.localQwenDownloadInProgress
-        case .remote:
-            return appState.canUseRemoteMode
+        case .permissions:
+            return appState.permissionStatus.allRequiredGranted
+        case .ready:
+            return appState.permissionStatus.allRequiredGranted
         }
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Welcome to FriSpeak")
+            VStack(alignment: .leading, spacing: 6) {
+                Text(currentStep.title)
                     .font(.largeTitle.weight(.bold))
                 Text(currentStep.subtitle)
                     .font(.title3)
@@ -1851,57 +1806,54 @@ private struct OnboardingFlowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(32)
             .background(.ultraThinMaterial)
-            
+
             Divider()
-            
-            // Content
+
             ScrollView {
                 Group {
                     switch currentStep {
                     case .welcome:
-                        WelcomeCard()
+                        OnboardingWelcomeCard()
                     case .permissions:
-                        PermissionsCard()
-                    case .hotkey:
-                        HotkeyCard()
-                    case .intelligence:
-                        IntelligenceCard()
+                        OnboardingPermissionsCard()
                     case .ready:
-                        ReadyCard()
+                        OnboardingReadyCard()
                     }
                 }
+                .frame(maxWidth: 560, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .transition(.asymmetric(
                     insertion: .move(edge: .trailing).combined(with: .opacity),
                     removal: .move(edge: .leading).combined(with: .opacity)
                 ))
                 .padding(32)
             }
-            
+
             Divider()
-            
-            // Navigation footer
+
             HStack(spacing: 12) {
                 Text("\(stepIndex + 1) / \(steps.count)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                
+                    .monospacedDigit()
+
                 Spacer()
-                
+
                 if stepIndex > 0 {
                     Button("Back") {
-                        withAnimation(.snappy) { stepIndex = max(stepIndex - 1, 0) }
+                        withAnimation(.snappy) { stepIndex -= 1 }
                     }
                     .buttonStyle(.glass)
                     .controlSize(.large)
                 }
 
                 if currentStep == .ready {
-                    Button("Finish Setup") {
+                    Button("Start Using FriSpeak") {
                         appState.completeOnboarding()
                     }
                     .buttonStyle(.glassProminent)
                     .controlSize(.large)
-                    .disabled(!canFinishSetup)
+                    .disabled(!canAdvance)
                 } else {
                     Button("Continue") {
                         withAnimation(.snappy) {
@@ -1910,6 +1862,7 @@ private struct OnboardingFlowView: View {
                     }
                     .buttonStyle(.glassProminent)
                     .controlSize(.large)
+                    .disabled(!canAdvance)
                 }
             }
             .padding(20)
@@ -1918,38 +1871,55 @@ private struct OnboardingFlowView: View {
     }
 }
 
-private struct WelcomeCard: View {
+private struct OnboardingWelcomeCard: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            Text("Push to talk, anywhere.")
-                .font(.largeTitle.weight(.bold))
-            
-            Text("Hold your shortcut, speak, and release. FriSpeak instantly transcribes and inserts the text for you.")
-                .font(.body)
-                .foregroundStyle(.secondary)
-            
-            VStack(alignment: .leading, spacing: 12) {
-                FeatureRow(symbol: "waveform.badge.mic", title: "Push-to-Talk", description: "Hold shortcut to record")
-                FeatureRow(symbol: "doc.on.clipboard", title: "Instant Insert", description: "Transcribes and pastes automatically")
-                FeatureRow(symbol: "bolt.circle", title: "Always Ready", description: "Works in any app")
+        VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Hold a shortcut, speak, release.")
+                    .font(.title2.weight(.semibold))
+                Text("FriSpeak transcribes your voice and inserts the text wherever your cursor is — in any app.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 8)
+
+            VStack(alignment: .leading, spacing: 14) {
+                OnboardingFeatureRow(
+                    symbol: "waveform.badge.mic",
+                    title: "Push-to-talk",
+                    description: "Hold your shortcut to record"
+                )
+                OnboardingFeatureRow(
+                    symbol: "text.insert",
+                    title: "Instant insert",
+                    description: "Text lands at the cursor automatically"
+                )
+                OnboardingFeatureRow(
+                    symbol: "lock.shield",
+                    title: "On-device by default",
+                    description: "Apple Speech — private, no setup needed"
+                )
+            }
+
+            Text("Speech models, AI cleanup, and OpenRouter can be configured later in Settings.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 }
 
-private struct FeatureRow: View {
+private struct OnboardingFeatureRow: View {
     let symbol: String
     let title: String
     let description: String
-    
+
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 14) {
             Image(systemName: symbol)
-                .font(.title2)
-                .foregroundStyle(.blue)
-                .frame(width: 32)
-            
+                .font(.title3)
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 28)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.body.weight(.semibold))
@@ -1961,212 +1931,152 @@ private struct FeatureRow: View {
     }
 }
 
-private struct PermissionsCard: View {
+private struct OnboardingPermissionsCard: View {
     @EnvironmentObject private var appState: AppState
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            PermissionRow(
-                title: "Microphone",
-                granted: appState.permissionStatus.microphone,
-                action: appState.requestMicrophoneThenOpenPreferences
-            )
-            PermissionRow(
-                title: "Speech Recognition",
-                granted: appState.permissionStatus.speechRecognition,
-                action: appState.requestSpeechThenOpenPreferences
-            )
-            PermissionRow(
-                title: "Accessibility",
-                granted: appState.permissionStatus.accessibility,
-                action: appState.promptForAccessibility
-            )
-            
-            if !appState.permissionStatus.allRequiredGranted {
-                HStack(spacing: 8) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
-                    Text("Please grant all permissions to continue.")
-                        .font(.callout)
-                }
-                .padding(.top, 8)
-            }
-        }
-    }
-}
 
-private struct HotkeyCard: View {
-    @EnvironmentObject private var appState: AppState
-    
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Choose a comfortable shortcut for push-to-talk.")
+        VStack(alignment: .leading, spacing: 20) {
+            Text("FriSpeak needs three system permissions to hear you and type for you.")
                 .font(.body)
                 .foregroundStyle(.secondary)
-            
-            HotkeyEditor(hotkey: $appState.hotkey)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(spacing: 0) {
+                OnboardingPermissionRow(
+                    title: "Microphone",
+                    detail: "Capture your voice",
+                    granted: appState.permissionStatus.microphone,
+                    action: appState.requestMicrophoneThenOpenPreferences
+                )
+                Divider().padding(.leading, 44)
+                OnboardingPermissionRow(
+                    title: "Speech Recognition",
+                    detail: "Turn speech into text",
+                    granted: appState.permissionStatus.speechRecognition,
+                    action: appState.requestSpeechThenOpenPreferences
+                )
+                Divider().padding(.leading, 44)
+                OnboardingPermissionRow(
+                    title: "Accessibility",
+                    detail: "Insert text at the cursor",
+                    granted: appState.permissionStatus.accessibility,
+                    action: appState.promptForAccessibility
+                )
+            }
+            .padding(.vertical, 4)
+            .glassEffect(.regular, in: .rect(cornerRadius: 14))
+
+            if appState.permissionStatus.allRequiredGranted {
+                Label("All permissions granted", systemImage: "checkmark.circle.fill")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.green)
+            } else {
+                Button {
+                    appState.requestAllRequiredPermissions()
+                } label: {
+                    Text("Enable Permissions")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassProminent)
+                .controlSize(.large)
+            }
         }
     }
 }
 
-private struct IntelligenceCard: View {
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        VStack(spacing: 18) {
-            SpeechConfigurationCard()
-            IntelligenceFeaturesConfigurationCard()
-            OpenRouterConfigurationCard()
-        }
-        .frame(maxWidth: 640)
-        .frame(maxWidth: .infinity, alignment: .top)
-        .animation(.default, value: appState.dictationMode)
-        .animation(.default, value: appState.intelligenceFeaturesEnabled)
-    }
-}
-
-private struct ReadyCard: View {
-    @EnvironmentObject private var appState: AppState
-
-    private var onboardingModeIsReady: Bool {
-        switch appState.dictationMode {
-        case .localNative:
-            return true
-        case .localGenerative:
-            return appState.localQwenModelCached || appState.localQwenDownloadInProgress
-        case .remote:
-            return appState.canUseRemoteMode
-        }
-    }
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            HStack(spacing: 16) {
-                Image(systemName: (appState.permissionStatus.allRequiredGranted && onboardingModeIsReady) ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle((appState.permissionStatus.allRequiredGranted && onboardingModeIsReady) ? Color.green : Color.orange)
-                    .symbolEffect(.bounce, value: appState.permissionStatus.allRequiredGranted && onboardingModeIsReady)
-                
-                VStack(alignment: .leading, spacing: 6) {
-                    Text((appState.permissionStatus.allRequiredGranted && onboardingModeIsReady) ? "Ready to Go!" : "Almost There")
-                        .font(.title.bold())
-                    Text(readySubtitle)
-                        .font(.body)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Shortcut")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(appState.hotkey.displayLabel)
-                        .font(.body.weight(.semibold).monospaced())
-                }
-                
-                HStack {
-                    Text("Processing")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(appState.dictationMode.summary)
-                        .font(.body)
-                }
-
-                HStack {
-                    Text("Configuration")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(appState.intelligenceAvailabilityStatus)
-                        .font(.body)
-                }
-            }
-            .padding(.vertical, 8)
-            
-            Text("Hold the shortcut to record, release to transcribe and insert.")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-    }
-
-    private var readySubtitle: String {
-        if !appState.permissionStatus.allRequiredGranted {
-            return "Please grant all permissions."
-        }
-
-        if !onboardingModeIsReady {
-            switch appState.dictationMode {
-            case .localNative:
-                return "Apple Speech is ready."
-            case .localGenerative:
-                return "Download the selected local speech model or wait for the current download to finish."
-            case .remote:
-                return "Configure OpenRouter to use remote speech."
-            }
-        }
-
-        return "FriSpeak is ready to use."
-    }
-}
-
-private struct PermissionRow: View {
+private struct OnboardingPermissionRow: View {
     let title: String
+    let detail: String
     let granted: Bool
     let action: () -> Void
-    
+
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: granted ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.title2)
-                .foregroundStyle(granted ? .green : .red)
+            Image(systemName: granted ? "checkmark.circle.fill" : "circle")
+                .font(.title3)
+                .foregroundStyle(granted ? .green : .secondary)
                 .symbolEffect(.bounce, value: granted)
-            
+                .frame(width: 28)
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.body.weight(.medium))
-                if !granted {
-                    Text("Required for FriSpeak to work")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            
+
             Spacer()
-            
+
             if !granted {
-                Button("Grant Access") {
+                Button("Grant") {
                     action()
                 }
+                .controlSize(.small)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
     }
 }
 
-struct PermissionStatusPill: View {
-    let title: String
-    let granted: Bool
-    let action: () -> Void
-    
+private struct OnboardingReadyCard: View {
+    @EnvironmentObject private var appState: AppState
+
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                    .foregroundStyle(granted ? Color.green : Color.orange)
-                    .symbolEffect(.pulse, isActive: !granted)
-                Text(title)
-                    .font(.system(size: 13, weight: .medium))
+        VStack(alignment: .leading, spacing: 24) {
+            HStack(spacing: 14) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(.green)
+                    .symbolEffect(.bounce, value: appState.permissionStatus.allRequiredGranted)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("You're ready")
+                        .font(.title2.weight(.bold))
+                    Text("Hold the shortcut to dictate. Release to insert.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .frame(maxWidth: .infinity)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Push-to-talk shortcut")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                HotkeyEditor(hotkey: $appState.hotkey)
+
+                Text("Default is Right Option — change anytime in Settings.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassEffect(.regular, in: .rect(cornerRadius: 14))
         }
-        .buttonStyle(.glass)
-        .disabled(granted)
-        .opacity(granted ? 0.6 : 1.0)
+    }
+}
+
+private enum SetupStep: Int, CaseIterable {
+    case welcome
+    case permissions
+    case ready
+
+    var title: String {
+        switch self {
+        case .welcome: return "Welcome to FriSpeak"
+        case .permissions: return "Permissions"
+        case .ready: return "Almost done"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .welcome: return "Background dictation for Mac."
+        case .permissions: return "Allow access so FriSpeak can work."
+        case .ready: return "Confirm your shortcut and start."
+        }
     }
 }
 
@@ -2313,32 +2223,4 @@ struct HotkeyKeyOption: Identifiable {
     ]
 }
 
-private enum SetupStep: Int, CaseIterable {
-    case welcome
-    case permissions
-    case hotkey
-    case intelligence
-    case ready
 
-    var subtitle: String {
-        switch self {
-        case .welcome: return "Set up background dictation."
-        case .permissions: return "Grant system access."
-        case .hotkey: return "Choose your shortcut."
-        case .intelligence: return "Configure speech and intelligence."
-        case .ready: return "Start using FriSpeak."
-        }
-    }
-
-    var progressLabel: String {
-        "\(rawValue + 1) / \(SetupStep.allCases.count)"
-    }
-
-    var previous: SetupStep {
-        SetupStep(rawValue: max(rawValue - 1, 0)) ?? .welcome
-    }
-
-    var next: SetupStep {
-        SetupStep(rawValue: min(rawValue + 1, SetupStep.allCases.count - 1)) ?? .ready
-    }
-}
