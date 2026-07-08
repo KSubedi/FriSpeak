@@ -1,0 +1,10 @@
+{
+  "name": "frispeak",
+  "version": "0.0.0",
+  "private": true,
+  "description": "FriSpeak — macOS push-to-talk dictation app.",
+  "scripts": {
+    "release": "node scripts/release.mjs",
+    "release:dry": "node scripts/release.mjs --dry-run"
+  }
+}

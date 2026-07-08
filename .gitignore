@@ -10,3 +10,5 @@ FriSpeak/scripts/__pycache__/
 
 # Keep the active vendored MLX fork, ignore backup clones.
 Vendor/mlx-swift-src/
+
+node_modules/
