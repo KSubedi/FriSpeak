@@ -88,7 +88,10 @@ require_xcode() {
 
 check_certs() {
     if [[ "$PRODUCTION" == true ]]; then
-        if security find-identity -v -p "Developer ID Application" 2>/dev/null | grep -q "Developer ID Application"; then
+        # Note: "Developer ID Application" is the certificate NAME, not a valid
+        # policy for `security find-identity` (valid policies include codesigning).
+        # Query the codesigning policy and grep for the Developer ID identity.
+        if security find-identity -v -p codesigning 2>/dev/null | grep -q "Developer ID Application"; then
             echo "[ok] Developer ID Application certificate found"
         else
             echo "ERROR: No Developer ID Application certificate found in keychain."
