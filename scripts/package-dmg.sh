@@ -25,6 +25,7 @@ SKIP_BUILD=false
 NOTARIZE=false
 APPLE_ID=""
 APP_SPECIFIC_PASSWORD=""
+KEYCHAIN_PROFILE=""
 
 usage() {
     cat <<EOF
@@ -35,6 +36,7 @@ Flags:
   --notarize       Submit DMG for notarization (requires --production + Apple ID)
   --apple-id ID    Apple ID email for notarization
   --password PWD   App-specific password for notarization
+  --keychain-profile NAME  Reuse a stored notarytool keychain profile (skip apple-id/password)
   --skip-build     Skip the xcodebuild step and only create DMG (expects .xcarchive in build/)
   --help           Show this help
 
@@ -58,6 +60,7 @@ while [[ $# -gt 0 ]]; do
         --notarize)     NOTARIZE=true ;;
         --apple-id)     APPLE_ID="$2"; shift ;;
         --password)     APP_SPECIFIC_PASSWORD="$2"; shift ;;
+        --keychain-profile) KEYCHAIN_PROFILE="$2"; shift ;;
         --help)         usage ;;
         *) echo "Unknown flag: $1"; usage ;;
     esac
@@ -117,6 +120,7 @@ build_archive() {
             CODE_SIGN_STYLE=Manual
             CODE_SIGN_IDENTITY="Developer ID Application"
             DEVELOPMENT_TEAM="$TEAM_ID"
+            ENABLE_HARDENED_RUNTIME=YES
         )
     else
         build_args+=(
@@ -260,22 +264,27 @@ notarize_dmg() {
     echo ""
     echo "=== Submitting DMG for notarization ==="
 
-    if [[ -z "$APPLE_ID" ]]; then
-        echo "ERROR: --apple-id is required for notarization"
-        exit 1
-    fi
-
-    local pw="$APP_SPECIFIC_PASSWORD"
-    if [[ -z "$pw" ]]; then
-        echo "ERROR: --password is required for notarization"
-        exit 1
-    fi
-
     local keychain_profile="frispeak-notary"
-    xcrun notarytool store-credentials "$keychain_profile" \
-        --apple-id "$APPLE_ID" \
-        --team-id "$TEAM_ID" \
-        --password "$pw" 2>/dev/null || true
+    if [[ -n "$KEYCHAIN_PROFILE" ]]; then
+        keychain_profile="$KEYCHAIN_PROFILE"
+        echo "  Using stored keychain profile: $keychain_profile"
+    else
+        if [[ -z "$APPLE_ID" ]]; then
+            echo "ERROR: --apple-id is required for notarization (or pass --keychain-profile)"
+            exit 1
+        fi
+
+        local pw="$APP_SPECIFIC_PASSWORD"
+        if [[ -z "$pw" ]]; then
+            echo "ERROR: --password is required for notarization (or pass --keychain-profile)"
+            exit 1
+        fi
+
+        xcrun notarytool store-credentials "$keychain_profile" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$TEAM_ID" \
+            --password "$pw" 2>/dev/null || true
+    fi
 
     echo "  Uploading DMG to Apple notary service..."
     local submission_id

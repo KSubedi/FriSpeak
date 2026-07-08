@@ -5,6 +5,7 @@
   "description": "FriSpeak — macOS push-to-talk dictation app.",
   "scripts": {
     "release": "node scripts/release.mjs",
-    "release:dry": "node scripts/release.mjs --dry-run"
+    "release:dry": "node scripts/release.mjs --dry-run",
+    "release:unsigned": "node scripts/release.mjs --unsigned"
   }
 }

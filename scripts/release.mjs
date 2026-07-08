@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 // FriSpeak local release script.
 //
-//   npm run release        # full release
-//   npm run release:dry    # show what would happen, change nothing
+//   npm run release            # full release (signed + notarized)
+//   npm run release:dry        # show what would happen, change nothing
+//   npm run release:unsigned   # skip signing/notarization
 //
 // Flow:
-//   1. Preflight (Xcode, gh, fetch tags, clean tree)
-//   2. Compute a date-based version: vYY.MM.DD, appending 1, 2, 3 ... for
+//   1. Preflight (Xcode, gh, fetch tags, clean tree).
+//   2. For notarized builds: verify a Developer ID Application certificate and
+//      a stored notarytool keychain profile (one-time setup is prompted if the
+//      profile is missing). Done BEFORE any git change so missing prerequisites
+//      fail early.
+//   3. Compute a date-based version: vYY.MM.DD, appending 1, 2, 3 ... for
 //      additional same-day releases (vYY.MM.DD1, vYY.MM.DD2, ...).
-//   3. Bump MARKETING_VERSION / CURRENT_PROJECT_VERSION in the Xcode project.
-//   4. Commit the version bump.
-//   5. Build + package the DMG (scripts/package-dmg.sh).
-//   6. Prompt for a release message.
-//   7. Generate release notes (install + unsigned-app + macOS permission reset).
-//   8. Push the version commit and create the GitHub Release with the DMG.
+//   4. Bump MARKETING_VERSION / CURRENT_PROJECT_VERSION in the Xcode project.
+//   5. Commit the version bump.
+//   6. Build + package + (notarize) the DMG (scripts/package-dmg.sh).
+//   7. Prompt for a release message.
+//   8. Generate release notes (install + macOS permission reset; Gatekeeper
+//      bypass only for unsigned builds).
+//   9. Push the version commit and create the GitHub Release with the DMG.
 
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -31,9 +37,12 @@ const DMG_PATH = path.join(BUILD_DIR, 'FriSpeak.dmg');
 const PACKAGE_DMG = path.join(ROOT, 'scripts', 'package-dmg.sh');
 const NOTES_PATH = path.join(BUILD_DIR, 'release-notes.md');
 const BUNDLE_ID = 'com.fridev.FriSpeak';
+const NOTARY_PROFILE = 'frispeak-notary';
 
 const argv = process.argv.slice(2);
 const DRY_RUN = argv.includes('--dry-run') || argv.includes('-n');
+const UNSIGNED = argv.includes('--unsigned');
+const NOTARIZE = !UNSIGNED;
 
 function run(cmd, opts = {}) {
   return execSync(cmd, { cwd: ROOT, stdio: 'inherit', ...opts });
@@ -92,6 +101,89 @@ function preflight() {
   return branch;
 }
 
+// ── Developer ID certificate ───────────────────────────────────────────────
+// Returns { name, teamId } parsed from the first "Developer ID Application"
+// identity in the keychain, or null if none is present.
+function detectDeveloperId() {
+  let out;
+  try { out = capture('security find-identity -v -p codesigning'); }
+  catch { return null; }
+  for (const line of out.split('\n')) {
+    const m = line.match(/"Developer ID Application: (.+) \(([A-Z0-9]+)\)"/);
+    if (m) return { name: m[1], teamId: m[2] };
+  }
+  return null;
+}
+
+// ── Interactive prompts ─────────────────────────────────────────────────────
+function ask(promptText) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(promptText, (answer) => { rl.close(); resolve(answer.trim()); });
+  });
+}
+
+// Prompt with terminal echo disabled (best-effort; falls back to visible input).
+function askHidden(promptText) {
+  return new Promise((resolve) => {
+    process.stdout.write(promptText);
+    let muted = false;
+    try { execSync('stty -echo', { stdio: 'inherit' }); muted = true; } catch {}
+    let data = '';
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
+    const onData = (c) => {
+      if (c === '\n' || c === '\r') {
+        process.stdin.removeListener('data', onData);
+        process.stdin.pause();
+        if (muted) { try { execSync('stty echo', { stdio: 'inherit' }); } catch {} }
+        process.stdout.write('\n');
+        resolve(data);
+      } else if (c === '\u0003') {
+        if (muted) { try { execSync('stty echo', { stdio: 'inherit' }); } catch {} }
+        process.exit(1);
+      } else {
+        data += c;
+      }
+    };
+    process.stdin.on('data', onData);
+  });
+}
+
+// ── Notarization credentials ───────────────────────────────────────────────
+// Ensures a reusable notarytool keychain profile exists. Prompts for Apple ID
+// and an app-specific password the first time, then reuses the stored profile.
+async function ensureNotaryProfile(teamId) {
+  let haveProfile = false;
+  try {
+    capture(`xcrun notarytool history --keychain-profile ${NOTARY_PROFILE}`);
+    haveProfile = true;
+  } catch {
+    haveProfile = false;
+  }
+
+  if (haveProfile) {
+    log(`  ✓ Notary profile found: ${NOTARY_PROFILE}`);
+    return;
+  }
+
+  if (DRY_RUN) {
+    log(`  (dry-run) would set up notary profile "${NOTARY_PROFILE}" (prompts for Apple ID + app-specific password)`);
+    return;
+  }
+
+  log('  No stored notary profile found. One-time setup:');
+  log('  (Create an app-specific password first at https://appleid.apple.com →');
+  log('   Sign-In and Security → App-Specific Passwords.)');
+  const appleId = await ask('  Apple ID email: ');
+  if (!appleId) die('Apple ID is required to set up notarization.');
+  const password = await askHidden('  App-specific password: ');
+  if (!password) die('App-specific password is required to set up notarization.');
+
+  run(`xcrun notarytool store-credentials "${NOTARY_PROFILE}" --apple-id "${appleId}" --team-id "${teamId}" --password "${password}"`);
+  log(`  ✓ Notary profile stored: ${NOTARY_PROFILE}`);
+}
+
 // ── Version ────────────────────────────────────────────────────────────────
 // vYY.MM.DD for the first release of the day, then vYY.MM.DD1, vYY.MM.DD2, ...
 function computeVersion() {
@@ -148,10 +240,18 @@ function commitBump(version) {
 }
 
 // ── Build + package DMG ────────────────────────────────────────────────────
-function buildDmg() {
-  if (DRY_RUN) { log('  (dry-run) would run: bash scripts/package-dmg.sh'); return; }
+function buildDmg({ teamId, notarize, profile }) {
+  const flags = notarize
+    ? `--production --notarize --keychain-profile "${profile}"`
+    : '';
+  if (DRY_RUN) {
+    log(`  (dry-run) would run: bash scripts/package-dmg.sh ${flags}`.replace(/\s+$/,''));
+    return;
+  }
   if (!existsSync(PACKAGE_DMG)) die(`Missing ${PACKAGE_DMG}`);
-  run(`bash "${PACKAGE_DMG}"`);
+  const env = { ...process.env };
+  if (teamId) env.FRI_TEAM_ID = teamId;
+  run(`bash "${PACKAGE_DMG}" ${flags}`.replace(/\s+$/,''), { env });
   if (!existsSync(DMG_PATH)) die(`DMG was not produced at ${DMG_PATH}`);
   const sizeMB = (statSync(DMG_PATH).size / 1048576).toFixed(1);
   log(`  ✓ DMG: ${DMG_PATH} (${sizeMB} MB)`);
@@ -169,20 +269,15 @@ function askMessage(version) {
 }
 
 // ── Release notes ──────────────────────────────────────────────────────────
-function buildNotes(version, message) {
+function buildNotes(version, message, notarized) {
   const userNotes = (message && message.trim()) || `Release ${version}.`;
   const F = '```';
   const ctrl = '`Ctrl`';
-  const lines = [
-    `# FriSpeak ${version}`,
+  const gatekeeper = notarized ? [
+    'This build is **signed with a Developer ID and notarized with Apple**, so',
+    'macOS will open it normally — no Gatekeeper bypass is needed.',
     '',
-    userNotes,
-    '',
-    '## Installation',
-    '1. Download **FriSpeak.dmg** below.',
-    '2. Open it and drag **FriSpeak** into your **Applications** folder.',
-    '3. Launch FriSpeak from Applications and complete onboarding.',
-    '',
+  ] : [
     '## Opening an unsigned app (macOS Gatekeeper)',
     'This build is not signed with an Apple Developer ID, so macOS Gatekeeper will block the first launch. Use any one of these:',
     '',
@@ -200,6 +295,18 @@ function buildNotes(version, message) {
     '2. Scroll down to the **Security** section.',
     '3. Find the message about FriSpeak being blocked and click **Open Anyway**.',
     '',
+  ];
+  const lines = [
+    `# FriSpeak ${version}`,
+    '',
+    userNotes,
+    '',
+    '## Installation',
+    '1. Download **FriSpeak.dmg** below.',
+    '2. Open it and drag **FriSpeak** into your **Applications** folder.',
+    '3. Launch FriSpeak from Applications and complete onboarding.',
+    '',
+    ...gatekeeper,
     '## Resetting macOS permissions',
     'FriSpeak needs **Microphone** and **Accessibility** permissions. If the hotkey stops working or it cannot hear audio, reset and re-grant them:',
     '',
@@ -243,9 +350,37 @@ async function main() {
   log('╔══════════════════════════════════════════╗');
   log('║        FriSpeak Local Release            ║');
   log('╚══════════════════════════════════════════╝');
+  log(`  Mode: ${UNSIGNED ? 'UNSIGNED (no signing/notarization)' : 'NOTARIZED (Developer ID + Apple notary)'}`);
   if (DRY_RUN) log('  (dry-run — nothing will be changed)');
 
   const branch = preflight();
+
+  // Verify signing/notarization prerequisites BEFORE making any git changes,
+  // so a missing certificate or credential fails early with no version bump.
+  let teamId = process.env.FRI_TEAM_ID || '';
+  if (NOTARIZE) {
+    step('Notarization prerequisites');
+    const devId = detectDeveloperId();
+    if (!devId) {
+      const msg = [
+        'No "Developer ID Application" certificate found in your keychain.',
+        'Notarization requires one (it is separate from "Apple Development").',
+        '',
+        'To create it:',
+        '  1. Open Xcode → Settings → Accounts → your Apple Developer account',
+        '  2. Click "Manage Certificates…" → "+" → "Developer ID Application"',
+        '  3. Re-run: npm run release',
+        '',
+        'For an unsigned release instead: npm run release:unsigned',
+      ].join('\n');
+      if (DRY_RUN) { log(`  ⚠ ${msg.replace(/\n/g, '\n  ')}`); }
+      else { die(msg); }
+    } else {
+      teamId = process.env.FRI_TEAM_ID || devId.teamId;
+      log(`  ✓ Developer ID Application: ${devId.name} (team ${devId.teamId})`);
+      await ensureNotaryProfile(teamId);
+    }
+  }
 
   const { version, marketing, buildNum, existing } = computeVersion();
   step('Version');
@@ -260,13 +395,13 @@ async function main() {
   commitBump(version);
 
   step('Build & package DMG');
-  buildDmg();
+  buildDmg({ teamId, notarize: NOTARIZE, profile: NOTARY_PROFILE });
 
   const message = DRY_RUN ? 'Sample release message for dry run.' : await askMessage(version);
 
   step('Generate release notes');
   mkdirSync(BUILD_DIR, { recursive: true });
-  const notes = buildNotes(version, message);
+  const notes = buildNotes(version, message, NOTARIZE);
   writeFileSync(NOTES_PATH, notes);
   if (DRY_RUN) {
     log(`  (dry-run) notes preview written to ${NOTES_PATH}`);
