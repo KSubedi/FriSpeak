@@ -147,6 +147,78 @@ enum LocalSpeechBackend: String, CaseIterable, Identifiable {
     }
 }
 
+/// How FriSpeak delivers transcribed text after a capture completes.
+enum TextDeliveryMode: String, CaseIterable, Identifiable {
+    case insert
+    case copy
+    case copyAndInsert
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .insert:
+            return "Insert"
+        case .copy:
+            return "Copy"
+        case .copyAndInsert:
+            return "Copy & Insert"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .insert:
+            return "Paste into the focused field and leave the clipboard unchanged."
+        case .copy:
+            return "Put the text on the clipboard without pasting."
+        case .copyAndInsert:
+            return "Paste into the focused field and leave the text on the clipboard."
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .insert:
+            return "text.insert"
+        case .copy:
+            return "doc.on.clipboard"
+        case .copyAndInsert:
+            return "doc.on.clipboard.fill"
+        }
+    }
+
+    var insertsText: Bool {
+        self != .copy
+    }
+
+    var copiesToClipboard: Bool {
+        self != .insert
+    }
+
+    var hudStatusText: String {
+        switch self {
+        case .insert:
+            return "Inserting text"
+        case .copy:
+            return "Copied to clipboard"
+        case .copyAndInsert:
+            return "Inserting and copying"
+        }
+    }
+
+    var statusSummaryText: String {
+        switch self {
+        case .insert:
+            return "Inserting text at the cursor"
+        case .copy:
+            return "Copying text to clipboard"
+        case .copyAndInsert:
+            return "Inserting text and copying to clipboard"
+        }
+    }
+}
+
 enum IntelligenceModel: String, CaseIterable, Identifiable {
     case apple
     case local
@@ -202,6 +274,7 @@ final class AppState: ObservableObject {
     @Published var openRouterAPIKey: String
     @Published var openRouterModel: String
     @Published var cursorAwarenessEnabled: Bool
+    @Published var textDeliveryMode: TextDeliveryMode
     @Published var historyRetentionLimit: Int
     @Published var historyAudioLoggingEnabled: Bool
     @Published var launchAtStartupEnabled: Bool
@@ -270,6 +343,7 @@ final class AppState: ObservableObject {
         self.openRouterAPIKey = resolvedPreferences.loadOpenRouterAPIKey()
         self.openRouterModel = resolvedPreferences.loadOpenRouterModel()
         self.cursorAwarenessEnabled = resolvedPreferences.loadCursorAwarenessEnabled()
+        self.textDeliveryMode = resolvedPreferences.loadTextDeliveryMode()
         self.historyRetentionLimit = resolvedPreferences.loadHistoryRetentionLimit()
         self.historyAudioLoggingEnabled = resolvedPreferences.loadHistoryAudioLoggingEnabled()
         self.launchAtStartupEnabled = resolvedPreferences.loadLaunchAtStartupEnabled()
@@ -403,6 +477,13 @@ final class AppState: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $textDeliveryMode
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.preferences.save(textDeliveryMode: newValue)
+            }
+            .store(in: &cancellables)
+
         $historyRetentionLimit
             .dropFirst()
             .map { min(max($0, 1), 1_000) }
@@ -512,14 +593,59 @@ final class AppState: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Brings the dashboard forward, creating it if it was closed.
     func showMainWindow() {
-        // This triggers the 'launcher' window in FriSpeakApp
         NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }) {
+
+        if let window = dashboardWindow() {
             window.makeKeyAndOrderFront(nil)
-        } else {
-            // Fallback for settings link if main window isn't found
-            NSWorkspace.shared.open(URL(string: "frispeak://show-main")!)
+            return
+        }
+
+        // Ask any live SwiftUI view with `openWindow` to open Window(id: "main").
+        // MenuBarExtra content is the usual host while the user is interacting.
+        NotificationCenter.default.post(name: .friSpeakOpenMainWindow, object: nil)
+
+        // If a SwiftUI host was not mounted (menu closed, etc.), fall back to the
+        // registered frispeak:// URL scheme handled by AppDelegate / onOpenURL.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self else { return }
+            if let window = self.dashboardWindow() {
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
+            if let url = URL(string: "frispeak://show-main") {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
+
+    /// The SwiftUI `Window(id: "main")` dashboard, if it currently exists.
+    private func dashboardWindow() -> NSWindow? {
+        NSApp.windows.first { window in
+            guard window.canBecomeKey, !(window is NSPanel) else {
+                return false
+            }
+
+            // Skip menu-bar extra / status item chrome.
+            let className = String(describing: type(of: window))
+            if className.localizedCaseInsensitiveContains("MenuBarExtra")
+                || className.localizedCaseInsensitiveContains("StatusBar")
+            {
+                return false
+            }
+
+            if window.identifier?.rawValue == "main" {
+                return true
+            }
+
+            // SwiftUI `Window("FriSpeak", id: "main")` often exposes the title only.
+            if window.title == "FriSpeak" {
+                return true
+            }
+
+            return false
         }
     }
 
@@ -575,7 +701,7 @@ final class AppState: ObservableObject {
         case .transcribing:
             return "Transcribing last recording"
         case .injecting:
-            return "Inserting text at the cursor"
+            return textDeliveryMode.statusSummaryText
         case .error(let message):
             return message
         }
@@ -590,7 +716,7 @@ final class AppState: ObservableObject {
         case .transcribing:
             return "text.bubble"
         case .injecting:
-            return "cursorarrow.motionlines"
+            return textDeliveryMode.systemImage
         case .error:
             return "exclamationmark.triangle"
         }
@@ -947,7 +1073,8 @@ final class AppState: ObservableObject {
     }
 
     func startCapture(forceRestart: Bool = false) async {
-        guard await prepareForCapture(requiresAccessibility: true) else {
+        // Inserting into other apps requires Accessibility. Copy-only mode does not.
+        guard await prepareForCapture(requiresAccessibility: textDeliveryMode.insertsText) else {
             return
         }
 
@@ -1143,8 +1270,11 @@ final class AppState: ObservableObject {
             var insertionModelResponse = rawModelResponse
             var insertionPrompt = modelPrompt
             var insertionTransportLog = modelTransportLog
+            let deliveryMode = textDeliveryMode
 
-            if let editorContext {
+            // Caret-aware insertion adaptation only matters when pasting in place.
+            // Copy-only delivery keeps the cleaned transcript as standalone clipboard text.
+            if deliveryMode.insertsText, let editorContext {
                 do {
                     let adaptedResult = try await adaptTextForInsertionWithTimeout(
                         text: finalText,
@@ -1197,14 +1327,18 @@ final class AppState: ObservableObject {
                 aiErrorMessage: aiErrorMessage
             )
 
-            let insertedText: String
-            if let ctx = editorContext {
-                insertedText = ctx.formatForInsertion(finalText)
+            let deliveredText: String
+            if deliveryMode.insertsText {
+                if let ctx = editorContext {
+                    deliveredText = ctx.formatForInsertion(finalText)
+                } else {
+                    deliveredText = fallbackInsertionTextWithoutContext(from: finalText)
+                }
             } else {
-                insertedText = fallbackInsertionTextWithoutContext(from: finalText)
+                deliveredText = finalText.trimmingCharacters(in: .whitespacesAndNewlines)
             }
 
-            guard !insertedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            guard !deliveredText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 if isCaptureSessionActive(sessionID) {
                     hudController.hide()
                     captureState = .idle
@@ -1216,8 +1350,8 @@ final class AppState: ObservableObject {
                 return
             }
             captureState = .injecting
-            hudController.show(text: "Inserting text", state: .injecting)
-            try await textInserter.insert(text: insertedText)
+            hudController.show(text: deliveryMode.hudStatusText, state: .injecting)
+            try await textInserter.deliver(text: deliveredText, mode: deliveryMode)
 
             guard isCaptureSessionActive(sessionID) else {
                 return
@@ -1322,7 +1456,7 @@ final class AppState: ObservableObject {
             if !permissionStatus.microphone || !permissionStatus.speechRecognition {
                 permissionStatus = await permissionsManager.requestMissingPermissions(promptForAccessibility: false)
                 guard permissionStatus.microphone && permissionStatus.speechRecognition else {
-                    showError("FriSpeak needs microphone and speech recognition permissions for transcription testing.")
+                    showError("FriSpeak needs microphone and speech recognition permissions.")
                     return false
                 }
             }

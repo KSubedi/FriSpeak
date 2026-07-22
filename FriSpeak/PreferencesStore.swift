@@ -21,6 +21,7 @@ final class PreferencesStore {
     private let openRouterAPIKeyKey = "openrouter_api_key"
     private let openRouterModelKey = "openrouter_model"
     private let cursorAwarenessEnabledKey = "cursor_awareness_enabled"
+    private let textDeliveryModeKey = "text_delivery_mode"
     private let historyRetentionLimitKey = "history_retention_limit"
     private let historyEntriesKey = "history_entries"
     private let historyAudioLoggingEnabledKey = "history_audio_logging_enabled"
@@ -182,6 +183,21 @@ final class PreferencesStore {
 
     func save(cursorAwarenessEnabled: Bool) {
         defaults.set(cursorAwarenessEnabled, forKey: cursorAwarenessEnabledKey)
+    }
+
+    func loadTextDeliveryMode() -> TextDeliveryMode {
+        guard
+            let rawValue = defaults.string(forKey: textDeliveryModeKey),
+            let mode = TextDeliveryMode(rawValue: rawValue)
+        else {
+            return .insert
+        }
+
+        return mode
+    }
+
+    func save(textDeliveryMode: TextDeliveryMode) {
+        defaults.set(textDeliveryMode.rawValue, forKey: textDeliveryModeKey)
     }
 
     func loadHistoryRetentionLimit() -> Int {

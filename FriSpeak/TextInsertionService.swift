@@ -6,9 +6,30 @@
 import AppKit
 
 struct TextInsertionService {
-    func insert(text: String) async throws {
+    /// Delivers text according to the user's preferred mode.
+    func deliver(text: String, mode: TextDeliveryMode) async throws {
+        switch mode {
+        case .copy:
+            copy(text: text)
+        case .insert:
+            try await insert(text: text, leaveOnClipboard: false)
+        case .copyAndInsert:
+            try await insert(text: text, leaveOnClipboard: true)
+        }
+    }
+
+    /// Places text on the system clipboard without pasting.
+    func copy(text: String) {
         let pasteboard = NSPasteboard.general
-        let snapshot = PasteboardSnapshot.capture(from: pasteboard)
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
+    /// Pastes into the focused app via Cmd+V.
+    /// When `leaveOnClipboard` is false, the previous clipboard contents are restored after paste.
+    func insert(text: String, leaveOnClipboard: Bool = false) async throws {
+        let pasteboard = NSPasteboard.general
+        let snapshot = leaveOnClipboard ? nil : PasteboardSnapshot.capture(from: pasteboard)
 
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
@@ -18,7 +39,7 @@ struct TextInsertionService {
             let commandDown = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: true),
             let commandUp = CGEvent(keyboardEventSource: source, virtualKey: 0x09, keyDown: false)
         else {
-            snapshot.restore(to: pasteboard)
+            snapshot?.restore(to: pasteboard)
             throw TextInsertionError.eventCreationFailed
         }
 
@@ -30,7 +51,7 @@ struct TextInsertionService {
 
         // Give the target app time to process the paste before restoring the clipboard
         try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
-        snapshot.restore(to: pasteboard)
+        snapshot?.restore(to: pasteboard)
     }
 }
 

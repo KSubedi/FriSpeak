@@ -6,6 +6,11 @@
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    /// Posted when something needs the SwiftUI `Window(id: "main")` scene opened.
+    static let friSpeakOpenMainWindow = Notification.Name("FriSpeak.openMainWindow")
+}
+
 @main
 struct FriSpeakApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -16,9 +21,7 @@ struct FriSpeakApp: App {
             DashboardView()
                 .environmentObject(appState)
                 .onOpenURL { url in
-                    if url.scheme == "frispeak" && url.host == "show-main" {
-                        appState.showMainWindow()
-                    }
+                    handleFriSpeakURL(url)
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -26,6 +29,7 @@ struct FriSpeakApp: App {
         // Min size from content; allow free resize so the dashboard fills larger displays.
         .windowResizability(.contentMinSize)
         .defaultSize(width: 920, height: 640)
+        .handlesExternalEvents(matching: Set(arrayLiteral: "show-main"))
 
         MenuBarExtra("FriSpeak", systemImage: appState.statusItemSymbolName) {
             MenuBarContentView()
@@ -33,10 +37,18 @@ struct FriSpeakApp: App {
         }
         .menuBarExtraStyle(.window)
     }
+
+    private func handleFriSpeakURL(_ url: URL) {
+        guard url.scheme == "frispeak" else { return }
+        if url.host == "show-main" || url.path == "/show-main" {
+            appState.showMainWindow()
+        }
+    }
 }
 
 struct MenuBarContentView: View {
     @EnvironmentObject private var appState: AppState
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -76,7 +88,7 @@ struct MenuBarContentView: View {
             // Action buttons
             VStack(spacing: 6) {
                 MenuButton(title: "Open Dashboard", symbol: "macwindow.on.rectangle") {
-                    appState.showMainWindow()
+                    openDashboard()
                 }
 
                 MenuButton(title: "Quit FriSpeak", symbol: "power") {
@@ -86,6 +98,25 @@ struct MenuBarContentView: View {
         }
         .padding(14)
         .frame(width: 240)
+        .onReceive(NotificationCenter.default.publisher(for: .friSpeakOpenMainWindow)) { _ in
+            openDashboard()
+        }
+    }
+
+    private func openDashboard() {
+        openWindow(id: "main")
+        NSApp.activate(ignoringOtherApps: true)
+        // After SwiftUI materializes the scene, force it front (LSUIElement apps
+        // sometimes leave the new window behind the previous frontmost app).
+        DispatchQueue.main.async {
+            if let window = NSApp.windows.first(where: { candidate in
+                guard !(candidate is NSPanel) else { return false }
+                return candidate.identifier?.rawValue == "main" || candidate.title == "FriSpeak"
+            }) {
+                window.makeKeyAndOrderFront(nil)
+            }
+            NSApp.activate(ignoringOtherApps: true)
+        }
     }
 }
 
@@ -113,6 +144,23 @@ struct MenuButton: View {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls where url.scheme == "frispeak" {
+            if url.host == "show-main" || url.path == "/show-main" {
+                // Avoid re-entering the delayed URL fallback inside showMainWindow.
+                NSApp.activate(ignoringOtherApps: true)
+                NotificationCenter.default.post(name: .friSpeakOpenMainWindow, object: nil)
+                DispatchQueue.main.async {
+                    if let window = NSApp.windows.first(where: {
+                        ($0.identifier?.rawValue == "main" || $0.title == "FriSpeak") && !($0 is NSPanel)
+                    }) {
+                        window.makeKeyAndOrderFront(nil)
+                    }
+                }
+            }
+        }
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

@@ -259,11 +259,29 @@ private struct GeneralSettingsView: View {
                     Label("Push-to-Talk Shortcut", systemImage: "command.square")
                         .font(.headline)
 
-                    Text("Hold this shortcut to record your voice, then release to transcribe and insert the text.")
+                    Text(pushToTalkDescription)
                         .font(.body)
                         .foregroundStyle(.secondary)
 
                     HotkeyEditor(hotkey: $appState.hotkey)
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Text Delivery", systemImage: "square.and.arrow.up")
+                        .font(.headline)
+
+                    Text("Choose what happens after transcription finishes.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+
+                    TextDeliveryModePicker(selection: $appState.textDeliveryMode)
+
+                    Text(appState.textDeliveryMode.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -401,6 +419,60 @@ private struct GeneralSettingsView: View {
             return "Local Speech"
         case .remote:
             return "OpenRouter"
+        }
+    }
+
+    private var pushToTalkDescription: String {
+        switch appState.textDeliveryMode {
+        case .insert:
+            return "Hold this shortcut to record your voice, then release to transcribe and insert the text."
+        case .copy:
+            return "Hold this shortcut to record your voice, then release to transcribe and copy the text to the clipboard."
+        case .copyAndInsert:
+            return "Hold this shortcut to record your voice, then release to transcribe, insert the text, and leave a copy on the clipboard."
+        }
+    }
+}
+
+private struct TextDeliveryModePicker: View {
+    @Binding var selection: TextDeliveryMode
+    @Namespace private var pickerNamespace
+
+    var body: some View {
+        GlassEffectContainer(spacing: 6) {
+            HStack(spacing: 4) {
+                ForEach(TextDeliveryMode.allCases) { mode in
+                    Button {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
+                            selection = mode
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: mode.systemImage)
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(mode.title)
+                                .font(.system(size: 12, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.85)
+                        }
+                        .foregroundStyle(selection == mode ? Color.primary : Color.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background {
+                            if selection == mode {
+                                Capsule()
+                                    .fill(Color.accentColor.opacity(0.22))
+                                    .matchedGeometryEffect(id: "textDeliveryMode", in: pickerNamespace)
+                            }
+                        }
+                        .contentShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help(mode.summary)
+                }
+            }
+            .padding(4)
+            .glassEffect(.regular.interactive(), in: .capsule)
         }
     }
 }
@@ -2034,7 +2106,7 @@ private struct OnboardingReadyCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("You're ready")
                         .font(.title2.weight(.bold))
-                    Text("Hold the shortcut to dictate. Release to insert.")
+                    Text("Hold the shortcut to dictate. Release to deliver the text.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                 }
